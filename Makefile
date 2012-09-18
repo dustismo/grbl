@@ -29,11 +29,11 @@
 
 DEVICE     = atmega328p
 CLOCK      = 16000000
-PROGRAMMER = -c avrisp2 -P usb
+PROGRAMMER = -c stk500v1 -P \\\\.\\COM15 -b 115200
 OBJECTS    = main.o motion_control.o gcode.o spindle_control.o serial.o protocol.o stepper.o \
              eeprom.o settings.o planner.o nuts_bolts.o limits.o print.o
 # FUSES      = -U hfuse:w:0xd9:m -U lfuse:w:0x24:m
-FUSES      = -U hfuse:w:0xd2:m -U lfuse:w:0xff:m
+# FUSES      = -U hfuse:w:0xd2:m -U lfuse:w:0xff:m
 # update that line with this when programmer is back up: 
 # FUSES      = -U hfuse:w:0xd7:m -U lfuse:w:0xff:m 
 
