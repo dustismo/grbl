@@ -101,7 +101,11 @@ static void st_wake_up()
     step_pulse_time = -(((settings.pulse_microseconds-2)*TICKS_PER_MICROSECOND) >> 3);
   #endif
   // Enable steppers by resetting the stepper disable port
-  STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
+  #ifdef STEPPERS_DISABLE_INVERT
+    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+  #else
+    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
+  #endif
   // Enable stepper driver interrupt
   TIMSK1 |= (1<<OCIE1A);
 }
@@ -117,7 +121,11 @@ void st_go_idle()
     _delay_ms(STEPPER_IDLE_LOCK_TIME);   
   #endif
   // Disable steppers by setting stepper disable
-  STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+  #ifdef STEPPERS_DISABLE_INVERT 
+    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
+  #else
+    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+  #endif
 }
 
 // This function determines an acceleration velocity change every CYCLES_PER_ACCELERATION_TICK by
