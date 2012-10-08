@@ -55,6 +55,17 @@
 #define SPINDLE_DIRECTION_PORT PORTD
 #define SPINDLE_DIRECTION_BIT 1  // Uno Digital Pin 13
 
+#define COOLANT_FLOOD_DDR   DDRC
+#define COOLANT_FLOOD_PORT  PORTC
+#define COOLANT_FLOOD_BIT   0  // Uno Analog Pin 0
+
+//   #define ENABLE_M7  // Mist coolant disabled by default. Uncomment to enable.
+#ifdef ENABLE_M7
+  #define COOLANT_MIST_DDR   DDRC
+  #define COOLANT_MIST_PORT  PORTC
+  #define COOLANT_MIST_BIT   1 // Uno Analog Pin 1
+#endif  
+
 // Define runtime command special characters. These characters are 'picked-off' directly from the
 // serial read data stream and are not passed to the grbl line execution parser. Select characters
 // that do not and must not exist in the streamed g-code program. ASCII control characters may be 
@@ -76,7 +87,7 @@
 // entering g-code into grbl, i.e. locating part zero or simple manual machining. If the axes drift,
 // grbl has no way to know this has happened, since stepper motors are open-loop control. Depending
 // on the machine, this parameter may need to be larger or smaller than the default time.
-// NOTE: If set to zero, the delay will not be compiled.
+// NOTE: If the define commented, the stepper lock will be disabled upon compiling.
 #define STEPPER_IDLE_LOCK_TIME 25 // (milliseconds) - Integer > 0
 
 // The temporal resolution of the acceleration management subsystem. Higher number give smoother
@@ -126,7 +137,7 @@
 // As well as, older FTDI FT232RL-based Arduinos(Duemilanove) are known to work with standard
 // terminal programs since their firmware correctly manage these XON/XOFF characters. In any
 // case, please report any successes to grbl administrators!
-#define ENABLE_XONXOFF 0 // Boolean. Default disabled.
+// #define ENABLE_XONXOFF // Default disabled. Uncomment to enable.
 
 // Creates a delay between the direction pin setting and corresponding step pulse by creating
 // another interrupt (Timer2 compare) to manage it. The main Grbl interrupt (Timer1 compare) 
@@ -140,14 +151,15 @@
 // of your successes or difficulties, as we will monitor this and possibly integrate this as a 
 // standard feature for future releases. However, we suggest to first try our direction delay
 // hack/solution posted in the Wiki involving inverting the stepper pin mask.
-// NOTE: If set greater than zero, step pulse delay will be compiled and enabled. Also, the 
-// total delay added with the Grbl settings pulse microseconds must not exceed 127 ms.
-#define STEP_PULSE_DELAY 0 // Step pulse delay in microseconds. Default disabled.
+// NOTE: Uncomment to enable. The recommended delay should be > 3us and the total step pulse
+// time, which includes the Grbl settings pulse microseconds, should not exceed 127us.
+// #define STEP_PULSE_DELAY 5 // Step pulse delay in microseconds. Default disabled.
 
 // ---------------------------------------------------------------------------------------
 
 // TODO: The following options are set as compile-time options for now, until the next EEPROM 
-// settings version has solidified. 
+// settings version has solidified. This is to prevent having to support dozens of different
+// incremental settings versions.
 #define CYCLE_AUTO_START 1    // Cycle auto-start boolean flag for the planner.
 #define BLOCK_DELETE_ENABLE 0 // Block delete enable/disable flag during g-code parsing
 #define REPORT_INCH_MODE 0    // Status reporting unit mode (1 = inch, 0 = mm)
@@ -160,11 +172,8 @@
 #endif
 
 //  Limit step rate for homing
-#define LIMIT_STEP_RATE 1  	// (mm/min)
-
-// Debounce delay is the time delay the controller waits for a "good" signal from the limit switch.
-// A delay of 3ms to 5ms is a good starting value.
-#define LIMIT_DEBOUNCE_DELAY 5 // (milliseconds)
-
+#define LIMIT_DEBOUNCE 50  // Limit switch debounce delay (in ms)
+// #define LIMIT_INVERT_MASK 0 //
+// #define LIMIT_NORMAL_HIGH 1 // Normal low 0 or normal high 1
 
 #endif

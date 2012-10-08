@@ -29,6 +29,7 @@
 #include "settings.h"
 #include "motion_control.h"
 #include "spindle_control.h"
+#include "coolant_control.h"
 #include "errno.h"
 #include "protocol.h"
 
@@ -75,10 +76,11 @@ typedef struct {
   uint8_t absolute_mode;           // 0 = relative motion, 1 = absolute motion {G90, G91}
   uint8_t program_flow;            // {M0, M1, M2, M30}
   int8_t spindle_direction;        // 1 = CW, -1 = CCW, 0 = Stop {M3, M4, M5}
+  uint8_t coolant_mode;            // 0 = Disable, 1 = Flood Enable {M8, M9}
   double feed_rate, seek_rate;     // Millimeters/second
   double position[3];              // Where the interpreter considers the tool to be at this point in the code
   uint8_t tool;
-  int16_t spindle_speed;           // RPM/100
+  uint16_t spindle_speed;          // RPM/100
   uint8_t plane_axis_0, 
           plane_axis_1, 
           plane_axis_2;            // The axes of the selected plane  
@@ -110,6 +112,12 @@ void gc_set_current_position(int32_t x, int32_t y, int32_t z)
   gc.position[X_AXIS] = x/settings.steps_per_mm[X_AXIS];
   gc.position[Y_AXIS] = y/settings.steps_per_mm[Y_AXIS];
   gc.position[Z_AXIS] = z/settings.steps_per_mm[Z_AXIS]; 
+}
+
+// Clears and zeros g-code parser position. Called by homing routine.
+void gc_clear_position()
+{
+  clear_vector(gc.position);
 }
 
 static float to_millimeters(double value) 
@@ -214,6 +222,11 @@ uint8_t gc_execute_line(char *line)
           case 3: gc.spindle_direction = 1; break;
           case 4: gc.spindle_direction = -1; break;
           case 5: gc.spindle_direction = 0; break;
+          #ifdef ENABLE_M7
+            case 7: gc.coolant_mode = COOLANT_MIST_ENABLE; break;
+          #endif
+          case 8: gc.coolant_mode = COOLANT_FLOOD_ENABLE; break;
+          case 9: gc.coolant_mode = COOLANT_DISABLE; break;
           default: FAIL(STATUS_UNSUPPORTED_STATEMENT);
         }            
         break;
@@ -279,7 +292,8 @@ uint8_t gc_execute_line(char *line)
   // [M3,M4,M5]: Update spindle state
   spindle_run(gc.spindle_direction, gc.spindle_speed);
   
-  //  ([M7,M8,M9]: Coolant state should be executed here.)
+  // [*M7,M8,M9]: Update coolant state
+  coolant_run(gc.coolant_mode);
   
   // [G4,G10,G28,G30,G92,G92.1]: Perform dwell, set coordinate system data, homing, or set axis offsets.
   // NOTE: These commands are in the same modal group, hence are mutually exclusive. G53 is in this
@@ -328,7 +342,7 @@ uint8_t gc_execute_line(char *line)
         mc_line(target[X_AXIS], target[Y_AXIS], target[Z_AXIS], settings.default_seek_rate, false);
       }
       mc_go_home(); 
-      clear_vector(gc.position); // Assumes home is at [0,0,0]
+//      clear_vector(gc.position); // Assumes home is at [0,0,0]
       axis_words = 0; // Axis words used. Lock out from motion modes by clearing flags.
       break;      
     case NON_MODAL_SET_COORDINATE_OFFSET:
@@ -529,10 +543,11 @@ uint8_t gc_execute_line(char *line)
   if (gc.program_flow) {
     plan_synchronize(); // Finish all remaining buffered motions. Program paused when complete.
     sys.auto_start = false; // Disable auto cycle start.
-    gc.program_flow = PROGRAM_FLOW_RUNNING; // Re-enable program flow after pause complete.
     
-    // If complete, reset to reload defaults (G92.2,G54,G17,G90,G94,M48,G40,M5,M9)
+    // If complete, reset to reload defaults (G92.2,G54,G17,G90,G94,M48,G40,M5,M9). Otherwise,
+    // re-enable program flow after pause complete, where cycle start will resume the program.
     if (gc.program_flow == PROGRAM_FLOW_COMPLETED) { sys.abort = true; }
+    else { gc.program_flow = PROGRAM_FLOW_RUNNING; }
   }    
   
   return(gc.status_code);
@@ -569,16 +584,16 @@ static int next_statement(char *letter, double *double_ptr, char *line, uint8_t 
   - Evaluation of expressions
   - Variables
   - Multiple home locations
-  - Multiple coordinate systems (Up to 6 may be added via config.h)
   - Probing
   - Override control
   - Tool changes
-
+   
+   (*) Indicates optional parameter, enabled through config.h and re-compile
    group 0 = {G92.2, G92.3} (Non modal: Cancel and re-enable G92 offsets)
    group 1 = {G38.2, G81 - G89} (Motion modes: straight probe, canned cycles)
    group 6 = {M6} (Tool change)
-   group 8 = {M7, M8, M9} coolant (special case: M7 and M8 may be active at the same time)
+   group 8 = {*M7} enable mist coolant
    group 9 = {M48, M49} enable/disable feed and speed override switches
-   group 12 = {G55, G56, G57, G58, G59, G59.1, G59.2, G59.3} coordinate system selection
+   group 12 = {*G55, *G56, *G57, *G58, *G59, G59.1, G59.2, G59.3} coordinate system selection
    group 13 = {G61, G61.1, G64} path control mode
 */

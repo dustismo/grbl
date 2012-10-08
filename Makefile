@@ -27,7 +27,7 @@
 #                is connected.
 # FUSES ........ Parameters for avrdude to flash the fuses appropriately.
 
-DEVICE     = atmega328p
+DEVICE     ?= atmega328p
 CLOCK      = 16000000
 PROGRAMMER = -c stk500v1 -P \\\\.\\COM15 -b 115200 -v -v -v
 OBJECTS    = main.o motion_control.o gcode.o spindle_control.o serial.o protocol.o stepper.o \
@@ -90,4 +90,4 @@ disasm:	main.elf
 	avr-objdump -d main.elf
 
 cpp:
-	$(COMPILE) -E main.c 
+	$(COMPILE) -E main.c
