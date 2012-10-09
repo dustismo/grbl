@@ -43,6 +43,7 @@
 
 #define LIMIT_DDR     DDRD
 #define LIMIT_PIN     PIND
+#define LIMIT_PORT    PORTD
 #define X_LIMIT_BIT   7  // Uno Digital Pin 7
 #define Y_LIMIT_BIT   6  // Uno Digital Pin 6
 #define Z_LIMIT_BIT   5  // Uno Digital Pin 5
