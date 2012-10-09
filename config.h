@@ -46,6 +46,9 @@
 #define X_LIMIT_BIT   7  // Uno Digital Pin 7
 #define Y_LIMIT_BIT   6  // Uno Digital Pin 6
 #define Z_LIMIT_BIT   5  // Uno Digital Pin 5
+// #define LIMIT_INT       PCIE0  // Pin change interrupt settings
+// #define LIMIT_INT_vect  PCINT0_vect
+// #define LIMIT_PCMSK     PCMSK0
 
 #define SPINDLE_ENABLE_DDR DDRD
 #define SPINDLE_ENABLE_PORT PORTD

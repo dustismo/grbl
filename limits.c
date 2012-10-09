@@ -35,18 +35,20 @@
 
 void limits_init() 
 {
-  LIMIT_DDR &= ~(LIMIT_MASK);
+  LIMIT_DDR &= ~(LIMIT_MASK); // Set as input pins
+  LIMIT_PORT |= (LIMIT_MASK); // Enable internal pull-up resistors. Normal high operation.
 }
 
 // Moves all specified axes in same specified direction (positive=true, negative=false)
 // and at the homing rate. Homing is a special motion case, where there is only an 
 // acceleration followed by abrupt asynchronous stops by each axes reaching their limit 
-// switch independently. Instead of showhorning homing cycles into the main stepper 
+// switch independently. Instead of shoehorning homing cycles into the main stepper 
 // algorithm and overcomplicate things, a stripped-down, lite version of the stepper 
 // algorithm is written here. This also lets users hack and tune this code freely for
 // their own particular needs without affecting the rest of Grbl.
 // NOTE: Only the abort runtime command can interrupt this process.
-static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir, double homing_rate) 
+static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
+                         bool invert_pin, float homing_rate) 
 {
   // Determine governing axes with finest step resolution per distance for the Bresenham
   // algorithm. This solves the issue when homing multiple axes that have different 
@@ -67,7 +69,7 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
   // used in the main planner to account for distance traveled when moving multiple axes.
   // NOTE: When axis acceleration independence is installed, this will be updated to move
   // all axes at their maximum acceleration and rate.
-  double ds = step_event_count/sqrt(x_axis+y_axis+z_axis);
+  float ds = step_event_count/sqrt(x_axis+y_axis+z_axis);
 
   // Compute the adjusted step rate change with each acceleration tick. (in step/min/acceleration_tick)
   uint32_t delta_rate = ceil( ds*settings.acceleration/(60*ACCELERATION_TICKS_PER_SECOND));
@@ -91,17 +93,22 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
   uint32_t step_rate = 0;  // Tracks step rate. Initialized from 0 rate. (in step/min)
   uint32_t trap_counter = MICROSECONDS_PER_ACCELERATION_TICK/2; // Acceleration trapezoid counter
   uint8_t out_bits;
+  uint8_t limit_state;
   for(;;) {
   
     // Reset out bits. Both direction and step pins appropriately inverted and set.
     out_bits = out_bits0;
+    
+    // Get limit pin state.
+    limit_state = LIMIT_PIN;
+    if (invert_pin) { limit_state ^= LIMIT_MASK; } // If leaving switch, invert to move.
     
     // Set step pins by Bresenham line algorithm. If limit switch reached, disable and
     // flag for completion.
     if (x_axis) {
       counter_x += steps[X_AXIS];
       if (counter_x > 0) {
-        if (LIMIT_PIN & (1<<X_LIMIT_BIT)) { out_bits ^= (1<<X_STEP_BIT); }
+        if (limit_state & (1<<X_LIMIT_BIT)) { out_bits ^= (1<<X_STEP_BIT); }
         else { x_axis = false; }
         counter_x -= step_event_count;
       }
@@ -109,7 +116,7 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
     if (y_axis) {
       counter_y += steps[Y_AXIS];
       if (counter_y > 0) {
-        if (LIMIT_PIN & (1<<Y_LIMIT_BIT)) { out_bits ^= (1<<Y_STEP_BIT); }
+        if (limit_state & (1<<Y_LIMIT_BIT)) { out_bits ^= (1<<Y_STEP_BIT); }
         else { y_axis = false; }
         counter_y -= step_event_count;
       }
@@ -117,7 +124,7 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
     if (z_axis) {
       counter_z += steps[Z_AXIS];
       if (counter_z > 0) {
-        if (LIMIT_PIN & (1<<Z_LIMIT_BIT)) { out_bits ^= (1<<Z_STEP_BIT); }
+        if (limit_state & (1<<Z_LIMIT_BIT)) { out_bits ^= (1<<Z_STEP_BIT); }
         else { z_axis = false; }
         counter_z -= step_event_count;
       }
@@ -151,34 +158,24 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
 
 static void approach_limit_switch(bool x, bool y, bool z) 
 {
-  homing_cycle(x, y, z, true, settings.default_seek_rate);
+  homing_cycle(x, y, z, true, false, settings.default_seek_rate);
 }
 
 
 static void leave_limit_switch(bool x, bool y, bool z) {
-  homing_cycle(x, y, z, false, settings.default_feed_rate);
+  homing_cycle(x, y, z, false, true, settings.default_feed_rate);
 }
 
 void limits_go_home() 
 {
   plan_synchronize();  // Empty all motions in buffer.
   
-  // TODO: Need to come up a better way to manage and set limit switches.
-  uint8_t original_limit_state = LIMIT_PIN;  // Store the current limit switch state
-
   // Jog all axes toward home to engage their limit switches.
   approach_limit_switch(false, false, true); // First home the z axis
   approach_limit_switch(true, true, false);  // Then home the x and y axis
   delay_ms(LIMIT_DEBOUNCE); // Delay to debounce signal before leaving limit switches
-  
-  // Xor previous and current limit switch state to determine which were high then but have become 
-  // low now. These are the actual installed limit switches.
-  uint8_t limit_switches_present = (original_limit_state ^ LIMIT_PIN) & LIMIT_MASK;
-  
+    
   // Now carefully leave the limit switches
-  leave_limit_switch(
-    limit_switches_present & (1<<X_LIMIT_BIT), 
-    limit_switches_present & (1<<Y_LIMIT_BIT),
-    limit_switches_present & (1<<Z_LIMIT_BIT));
-  delay_ms(LIMIT_DEBOUNCE); // Delay to debounce signal before leaving limit switches    
+  leave_limit_switch(true,true,true);
+  delay_ms(LIMIT_DEBOUNCE); // Delay to debounce signal before exiting routine
 }
