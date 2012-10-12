@@ -98,12 +98,6 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
   uint32_t trap_counter = MICROSECONDS_PER_ACCELERATION_TICK/2; // Acceleration trapezoid counter
   uint8_t out_bits;
   uint8_t limit_state;
-    // Enable steppers by resetting the stepper disable port
-  #ifdef STEPPERS_DISABLE_INVERT
-    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
-  #else
-    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
-  #endif
 
   for(;;) {
   
@@ -168,12 +162,6 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
       }
     }
   }
-    // Disable steppers by setting stepper disable
-  #ifdef STEPPERS_DISABLE_INVERT 
-    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
-  #else
-    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
-  #endif
 
 }
 
@@ -181,6 +169,13 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
 void limits_go_home() 
 {
   plan_synchronize();  // Empty all motions in buffer.
+  
+    // Enable steppers by resetting the stepper disable port
+  #ifdef STEPPERS_DISABLE_INVERT
+    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+  #else
+    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
+  #endif
   
   // Jog all axes toward home to engage their limit switches at faster homing seek rate.
   homing_cycle(false, false, true, true, false, settings.homing_seek_rate); // First jog the z axis
@@ -201,4 +196,11 @@ void limits_go_home()
       delay_ms(settings.homing_debounce_delay);
     }
   }
+
+    // Disable steppers by setting stepper disable
+  #ifdef STEPPERS_DISABLE_INVERT 
+    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
+  #else
+    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+  #endif
 }
