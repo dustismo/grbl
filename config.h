@@ -85,14 +85,6 @@
 // This parameter must be one or greater, currently supporting up to a value of 6.
 #define N_COORDINATE_SYSTEM 1
 
-// This parameter sets the delay time before disabling the steppers after the final block of movement.
-// A short delay ensures the steppers come to a complete stop and the residual inertial force in the 
-// CNC axes don't cause the axes to drift off position. This is particularly important when manually 
-// entering g-code into grbl, i.e. locating part zero or simple manual machining. If the axes drift,
-// grbl has no way to know this has happened, since stepper motors are open-loop control. Depending
-// on the machine, this parameter may need to be larger or smaller than the default time.
-// NOTE: If the define commented, the stepper lock will be disabled upon compiling.
-#define STEPPER_IDLE_LOCK_TIME 25 // (milliseconds) - Integer > 0
 
 // The temporal resolution of the acceleration management subsystem. Higher number give smoother
 // acceleration but may impact performance.
@@ -129,6 +121,11 @@
 // run-time command executions, like status reports, since these are performed between each dwell 
 // time step. Also, keep in mind that the Arduino delay timer is not very accurate for long delays.
 #define DWELL_TIME_STEP 50 // Integer (1-255) (milliseconds)
+
+// Number of homing cycles performed after when the machine initially jogs to limit switches.
+// This help in preventing overshoot and should improve repeatability. This value should be one or 
+// greater.
+#define N_HOMING_CYCLE 2 // Integer (1-128)
 
 // ---------------------------------------------------------------------------------------
 // FOR ADVANCED USERS ONLY: 
@@ -179,5 +176,15 @@
 #define LIMIT_DEBOUNCE 50  // Limit switch debounce delay (in ms)
 // #define LIMIT_INVERT_MASK 0 //
 // #define LIMIT_NORMAL_HIGH 1 // Normal low 0 or normal high 1
+
+// This parameter sets the delay time before disabling the steppers after the final block of movement.
+// A short delay ensures the steppers come to a complete stop and the residual inertial force in the 
+// CNC axes don't cause the axes to drift off position. This is particularly important when manually 
+// entering g-code into grbl, i.e. locating part zero or simple manual machining. If the axes drift,
+// grbl has no way to know this has happened, since stepper motors are open-loop control. Depending
+// on the machine, this parameter may need to be larger or smaller than the default time.
+// NOTE: If the define commented, the stepper lock will be disabled upon compiling.
+// -> NOW INSTALLED IN SETTINGS #define STEPPER_IDLE_LOCK_TIME 25 // (milliseconds) - Integer > 0
+
 
 #endif

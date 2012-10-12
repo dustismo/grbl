@@ -80,9 +80,8 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
   uint32_t dt_min = lround(1000000*60/(ds*homing_rate)); // Cruising (usec/step)
   uint32_t dt = 1000000*60/MINIMUM_STEPS_PER_MINUTE; // Initial (usec/step)
       
-  // Determine default out_bits set. Direction fixed and step pin inverted
-  uint8_t out_bits0 = DIRECTION_MASK; 
-  out_bits0 ^= settings.invert_mask;  // Apply the global step and direction invert mask
+  // Set default out_bits. 
+  uint8_t out_bits0 = settings.invert_mask;
   if (!pos_dir) { out_bits0 ^= DIRECTION_MASK; }   // Invert bits, if negative dir.
   
   // Initialize stepping variables
@@ -156,26 +155,28 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
   }
 }
 
-static void approach_limit_switch(bool x, bool y, bool z) 
-{
-  homing_cycle(x, y, z, true, false, settings.default_seek_rate);
-}
-
-
-static void leave_limit_switch(bool x, bool y, bool z) {
-  homing_cycle(x, y, z, false, true, settings.default_feed_rate);
-}
 
 void limits_go_home() 
 {
   plan_synchronize();  // Empty all motions in buffer.
   
-  // Jog all axes toward home to engage their limit switches.
-  approach_limit_switch(false, false, true); // First home the z axis
-  approach_limit_switch(true, true, false);  // Then home the x and y axis
-  delay_ms(LIMIT_DEBOUNCE); // Delay to debounce signal before leaving limit switches
+  // Jog all axes toward home to engage their limit switches at faster homing seek rate.
+  homing_cycle(false, false, true, true, false, settings.homing_seek_rate); // First jog the z axis
+  homing_cycle(true, true, false, true, false, settings.homing_seek_rate);   // Then jog the x and y axis
+  delay_ms(settings.homing_debounce_delay); // Delay to debounce signal
     
-  // Now carefully leave the limit switches
-  leave_limit_switch(true,true,true);
-  delay_ms(LIMIT_DEBOUNCE); // Delay to debounce signal before exiting routine
+  // Now in proximity of all limits. Carefully leave and approach switches in multiple cycles
+  // to precisely hone in on the machine zero location. Moves at slower homing feed rate.
+  int8_t n_cycle = N_HOMING_CYCLE;
+  while (n_cycle--) {
+    // Leave all switches to release them. After cycles complete, this is machine zero.
+    homing_cycle(true, true, true, false, true, settings.homing_feed_rate);
+    delay_ms(settings.homing_debounce_delay);
+    
+    if (n_cycle > 0) {
+      // Re-approach all switches to re-engage them.
+      homing_cycle(true, true, true, true, false, settings.homing_feed_rate);
+      delay_ms(settings.homing_debounce_delay);
+    }
+  }
 }
