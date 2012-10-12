@@ -79,7 +79,7 @@
 #define CMD_STATUS_REPORT '?'
 #define CMD_FEED_HOLD '!'
 #define CMD_CYCLE_START '~'
-#define CMD_RESET 0x18 // ctrl-x
+#define CMD_RESET '|' 
 
 // Specifies the number of work coordinate systems grbl will support (G54 - G59).
 // This parameter must be one or greater, currently supporting up to a value of 6.

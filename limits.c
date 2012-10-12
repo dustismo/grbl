@@ -31,6 +31,9 @@
 #include "planner.h"
 #include "protocol.h"
 
+#include "print.h"
+#include <avr/pgmspace.h>
+
 #define MICROSECONDS_PER_ACCELERATION_TICK  (1000000/ACCELERATION_TICKS_PER_SECOND)
 
 void limits_init() 
@@ -50,6 +53,8 @@ void limits_init()
 static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
                          bool invert_pin, float homing_rate) 
 {
+        printPgmString(PSTR("..starting homing cycle\r\n")); 
+
   // Determine governing axes with finest step resolution per distance for the Bresenham
   // algorithm. This solves the issue when homing multiple axes that have different 
   // resolutions without exceeding system acceleration setting. It doesn't have to be
@@ -93,6 +98,13 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
   uint32_t trap_counter = MICROSECONDS_PER_ACCELERATION_TICK/2; // Acceleration trapezoid counter
   uint8_t out_bits;
   uint8_t limit_state;
+    // Enable steppers by resetting the stepper disable port
+  #ifdef STEPPERS_DISABLE_INVERT
+    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+  #else
+    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
+  #endif
+
   for(;;) {
   
     // Reset out bits. Both direction and step pins appropriately inverted and set.
@@ -108,7 +120,8 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
       counter_x += steps[X_AXIS];
       if (counter_x > 0) {
         if (limit_state & (1<<X_LIMIT_BIT)) { out_bits ^= (1<<X_STEP_BIT); }
-        else { x_axis = false; }
+        else { x_axis = false; 
+               printPgmString(PSTR("...x limit reached\r\n"));  }
         counter_x -= step_event_count;
       }
     }
@@ -116,7 +129,8 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
       counter_y += steps[Y_AXIS];
       if (counter_y > 0) {
         if (limit_state & (1<<Y_LIMIT_BIT)) { out_bits ^= (1<<Y_STEP_BIT); }
-        else { y_axis = false; }
+        else { y_axis = false;  
+               printPgmString(PSTR("...y limit reached\r\n")); }
         counter_y -= step_event_count;
       }
     }
@@ -124,7 +138,8 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
       counter_z += steps[Z_AXIS];
       if (counter_z > 0) {
         if (limit_state & (1<<Z_LIMIT_BIT)) { out_bits ^= (1<<Z_STEP_BIT); }
-        else { z_axis = false; }
+        else { z_axis = false;  
+               printPgmString(PSTR("...z limit reached\r\n")); }
         counter_z -= step_event_count;
       }
     }        
@@ -153,6 +168,13 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
       }
     }
   }
+    // Disable steppers by setting stepper disable
+  #ifdef STEPPERS_DISABLE_INVERT 
+    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
+  #else
+    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+  #endif
+
 }
 
 
