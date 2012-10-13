@@ -84,7 +84,9 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
   // is based on the MINIMUM_STEPS_PER_MINUTE config.
   uint32_t dt_min = lround(1000000*60/(ds*homing_rate)); // Cruising (usec/step)
   uint32_t dt = 1000000*60/MINIMUM_STEPS_PER_MINUTE; // Initial (usec/step)
-      
+  printInteger(dt_min); printPgmString(PSTR(" dt min\r\n")); 
+  printInteger(dt); printPgmString(PSTR(" dt\r\n")); 
+    
   // Set default out_bits. 
   uint8_t out_bits0 = settings.invert_mask;
   if (!pos_dir) { out_bits0 ^= DIRECTION_MASK; }   // Invert bits, if negative dir.

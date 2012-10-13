@@ -29,7 +29,7 @@
 
 DEVICE     ?= atmega328p
 CLOCK      = 16000000
-PROGRAMMER = -c stk500v1 -P \\\\.\\COM15 -b 115200 -v -v -v
+PROGRAMMER = -c stk500v1 -P \\\\.\\COM41 -b 115200 -v -v -v
 OBJECTS    = main.o motion_control.o gcode.o spindle_control.o coolant_control.o serial.o protocol.o stepper.o \
              eeprom.o settings.o planner.o nuts_bolts.o limits.o print.o
 # FUSES      = -U hfuse:w:0xd9:m -U lfuse:w:0x24:m
