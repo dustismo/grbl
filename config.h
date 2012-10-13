@@ -164,13 +164,6 @@
 #define CYCLE_AUTO_START 1    // Cycle auto-start boolean flag for the planner.
 #define BLOCK_DELETE_ENABLE 0 // Block delete enable/disable flag during g-code parsing
 #define REPORT_INCH_MODE 0    // Status reporting unit mode (1 = inch, 0 = mm)
-#if REPORT_INCH_MODE
-  #define DECIMAL_PLACES 3
-  #define DECIMAL_MULTIPLIER 1000 // 10^DECIMAL_PLACES
-#else
-  #define DECIMAL_PLACES 2  // mm-mode
-  #define DECIMAL_MULTIPLIER 100
-#endif
 
 //  Limit step rate for homing
 #define LIMIT_DEBOUNCE 50  // Limit switch debounce delay (in ms)

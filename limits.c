@@ -164,7 +164,6 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
       }
     }
   }
-
 }
 
 
