@@ -40,6 +40,7 @@
 #define STEPPERS_DISABLE_PORT   PORTD
 #define STEPPERS_DISABLE_BIT    4  // Uno Digital Pin 4
 #define STEPPERS_DISABLE_INVERT    // Logic low out for disable (e.g. steppernug)
+#define X2_DISABLE_BIT              3  // Uno Digital Pin 3  Hi disables X2
 
 #define LIMIT_DDR     DDRD
 #define LIMIT_PIN     PIND
@@ -47,10 +48,12 @@
 #define X_LIMIT_BIT   7  // Uno Digital Pin 7
 #define Y_LIMIT_BIT   6  // Uno Digital Pin 6
 #define Z_LIMIT_BIT   5  // Uno Digital Pin 5
+#define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
 // #define LIMIT_INT       PCIE0  // Pin change interrupt settings
 // #define LIMIT_INT_vect  PCINT0_vect
 // #define LIMIT_PCMSK     PCMSK0
 
+//#define SPINDLE_PRESENT
 #define SPINDLE_ENABLE_DDR DDRD
 #define SPINDLE_ENABLE_PORT PORTD
 #define SPINDLE_ENABLE_BIT 3  // Uno Digital Pin 3
@@ -59,6 +62,7 @@
 #define SPINDLE_DIRECTION_PORT PORTD
 #define SPINDLE_DIRECTION_BIT 1  // Uno Digital Pin 13
 
+//#define COOLANT_PRESENT
 #define COOLANT_FLOOD_DDR   DDRC
 #define COOLANT_FLOOD_PORT  PORTC
 #define COOLANT_FLOOD_BIT   0  // Uno Analog Pin 0

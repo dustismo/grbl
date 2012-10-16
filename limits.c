@@ -50,7 +50,7 @@ void limits_init()
 // algorithm is written here. This also lets users hack and tune this code freely for
 // their own particular needs without affecting the rest of Grbl.
 // NOTE: Only the abort runtime command can interrupt this process.
-static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
+static void homing_cycle(bool x_axis, bool x2_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
                          bool invert_pin, float homing_rate) 
 {
         printPgmString(PSTR("..starting homing cycle\r\n")); 
@@ -86,10 +86,18 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
   uint32_t dt = 1000000*60/MINIMUM_STEPS_PER_MINUTE; // Initial (usec/step)
   printInteger(dt_min); printPgmString(PSTR(" dt min\r\n")); 
   printInteger(dt); printPgmString(PSTR(" dt\r\n")); 
-    
+
+  // Set X2 enable
+  if(x2_axis)
+    STEPPERS_DISABLE_PORT &= ~(1<<X2_DISABLE_BIT);
+  else
+    STEPPERS_DISABLE_PORT |= (1<<X2_DISABLE_BIT);
+  
   // Set default out_bits. 
   uint8_t out_bits0 = settings.invert_mask;
   if (!pos_dir) { out_bits0 ^= DIRECTION_MASK; }   // Invert bits, if negative dir.
+  
+
   
   // Initialize stepping variables
   int32_t counter_x = -(step_event_count >> 1); // Bresenham counters
@@ -115,7 +123,10 @@ static void homing_cycle(bool x_axis, bool y_axis, bool z_axis, int8_t pos_dir,
     if (x_axis) {
       counter_x += steps[X_AXIS];
       if (counter_x > 0) {
-        if (limit_state & (1<<X_LIMIT_BIT)) { out_bits ^= (1<<X_STEP_BIT); }
+        if (x2_axis && (limit_state & (1<<X2_LIMIT_BIT)) )
+           { out_bits ^= (1<<X_STEP_BIT); }
+        else if (!x2_axis && (limit_state & (1<<X_LIMIT_BIT)) )
+           { out_bits ^= (1<<X_STEP_BIT); }
         else { x_axis = false; 
                printPgmString(PSTR("...x limit reached\r\n"));  }
         counter_x -= step_event_count;
@@ -179,8 +190,8 @@ void limits_go_home()
   #endif
   
   // Jog all axes toward home to engage their limit switches at faster homing seek rate.
-  homing_cycle(false, false, true, true, false, settings.homing_seek_rate); // First jog the z axis
-  homing_cycle(true, true, false, true, false, settings.homing_seek_rate);   // Then jog the x and y axis
+  homing_cycle(false, false, false, true, true, false, settings.homing_seek_rate); // First jog the z axis
+  homing_cycle(true, true, true, false, true, false, settings.homing_seek_rate);   // Then jog the x and y axis
   delay_ms(settings.homing_debounce_delay); // Delay to debounce signal
     
   // Now in proximity of all limits. Carefully leave and approach switches in multiple cycles
@@ -188,20 +199,28 @@ void limits_go_home()
   int8_t n_cycle = N_HOMING_CYCLE;
   while (n_cycle--) {
     // Leave all switches to release them. After cycles complete, this is machine zero.
-    homing_cycle(true, true, true, false, true, settings.homing_feed_rate);
+    homing_cycle(true, false, false, false, true, false, settings.homing_feed_rate);
+    delay_ms(settings.homing_debounce_delay);
+    homing_cycle(true, true, true, true, false, true, settings.homing_feed_rate);
     delay_ms(settings.homing_debounce_delay);
     
     if (n_cycle > 0) {
-      // Re-approach all switches to re-engage them.
-      homing_cycle(true, true, true, true, false, settings.homing_feed_rate);
+      homing_cycle(true, false, false, false, false, true, settings.homing_feed_rate);
+      delay_ms(settings.homing_debounce_delay);
+     // Re-approach all switches to re-engage them.
+      homing_cycle(true, true, true, true, true, false, settings.homing_feed_rate);
       delay_ms(settings.homing_debounce_delay);
     }
   }
 
+  #if 0
     // Disable steppers by setting stepper disable
   #ifdef STEPPERS_DISABLE_INVERT 
     STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
   #else
     STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
+  #endif
+   // enable X2 slave
+  STEPPERS_DISABLE_PORT &= ~(1<<X2_DISABLE_BIT);
   #endif
 }
