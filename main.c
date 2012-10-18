@@ -83,6 +83,9 @@ int main(void)
       #ifdef COOLANT_PRESENT
       coolant_init();
       #endif
+      #ifdef MCP23017_PRESENT
+      MCP23017_begin(MCP23017_ADDR);
+      #endif
       limits_init();
       st_reset(); // Clear stepper subsystem variables.
       

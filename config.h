@@ -26,6 +26,7 @@
 
 #define BAUD_RATE 9600
 
+
 // Define pin-assignments
 #define STEPPING_DDR       DDRB
 #define STEPPING_PORT      PORTB
@@ -53,7 +54,7 @@
 #define LIMIT_INT_vect  PCINT0_vect
 #define LIMIT_PCMSK     PCMSK0
 
-//#define SPINDLE_PRESENT
+#define SPINDLE_PRESENT
 #define SPINDLE_ENABLE_DDR DDRD
 #define SPINDLE_ENABLE_PORT PORTD
 #define SPINDLE_ENABLE_BIT 3  // Uno Digital Pin 3
@@ -62,7 +63,7 @@
 #define SPINDLE_DIRECTION_PORT PORTD
 #define SPINDLE_DIRECTION_BIT 1  // Uno Digital Pin 13
 
-//#define COOLANT_PRESENT
+#define COOLANT_PRESENT
 #define COOLANT_FLOOD_DDR   DDRC
 #define COOLANT_FLOOD_PORT  PORTC
 #define COOLANT_FLOOD_BIT   0  // Uno Analog Pin 0
@@ -175,5 +176,7 @@
 // NOTE: If the define commented, the stepper lock will be disabled upon compiling.
 // -> NOW INSTALLED IN SETTINGS #define STEPPER_IDLE_LOCK_TIME 25 // (milliseconds) - Integer > 0
 
+
+#include "config_ose.h"
 
 #endif
