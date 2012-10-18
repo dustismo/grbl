@@ -116,16 +116,15 @@ void st_go_idle()
   TIMSK1 &= ~(1<<OCIE1A); 
   // Force stepper dwell to lock axes for a defined amount of time to ensure the axes come to a complete
   // stop and not drift from residual inertial forces at the end of the last movement.
-  if(settings.stepper_idle_lock_time == 0) {
-    return;
-  }
-  delay_ms(settings.stepper_idle_lock_time);   
-  // Disable steppers by setting stepper disable
+  delay_ms(settings.stepper_idle_lock_time);
+  // Disable steppers only upon system alarm activated or by user setting to keep enabled.
+  if ((settings.stepper_idle_lock_time != 0xff) || bit_istrue(sys.execute,EXEC_ALARM)) {
   #ifdef STEPPERS_DISABLE_INVERT 
     STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
   #else
     STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
   #endif
+  }
 }
 
 // This function determines an acceleration velocity change every CYCLES_PER_ACCELERATION_TICK by

@@ -49,9 +49,9 @@
 #define Y_LIMIT_BIT   6  // Uno Digital Pin 6
 #define Z_LIMIT_BIT   5  // Uno Digital Pin 5
 #define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
-// #define LIMIT_INT       PCIE0  // Pin change interrupt settings
-// #define LIMIT_INT_vect  PCINT0_vect
-// #define LIMIT_PCMSK     PCMSK0
+#define LIMIT_INT       PCIE0  // Pin change interrupt settings
+#define LIMIT_INT_vect  PCINT0_vect
+#define LIMIT_PCMSK     PCMSK0
 
 //#define SPINDLE_PRESENT
 #define SPINDLE_ENABLE_DDR DDRD
@@ -89,7 +89,6 @@
 // This parameter must be one or greater, currently supporting up to a value of 6.
 #define N_COORDINATE_SYSTEM 1
 
-
 // The temporal resolution of the acceleration management subsystem. Higher number give smoother
 // acceleration but may impact performance.
 // NOTE: Increasing this parameter will help any resolution related issues, especially with machines 
@@ -99,7 +98,7 @@
 // round-off can be great enough to cause problems and/or it's too fast for the Arduino. The correct
 // value for this parameter is machine dependent, so it's advised to set this only as high as needed.
 // Approximate successful values can range from 30L to 100L or more.
-#define ACCELERATION_TICKS_PER_SECOND 50L
+#define ACCELERATION_TICKS_PER_SECOND 60L
 
 // Minimum planner junction speed. Sets the default minimum speed the planner plans for at the end
 // of the buffer and all stops. This should not be much greater than zero and should only be changed
@@ -165,14 +164,7 @@
 // TODO: The following options are set as compile-time options for now, until the next EEPROM 
 // settings version has solidified. This is to prevent having to support dozens of different
 // incremental settings versions.
-#define CYCLE_AUTO_START 1    // Cycle auto-start boolean flag for the planner.
 #define BLOCK_DELETE_ENABLE 0 // Block delete enable/disable flag during g-code parsing
-#define REPORT_INCH_MODE 0    // Status reporting unit mode (1 = inch, 0 = mm)
-
-//  Limit step rate for homing
-#define LIMIT_DEBOUNCE 50  // Limit switch debounce delay (in ms)
-// #define LIMIT_INVERT_MASK 0 //
-// #define LIMIT_NORMAL_HIGH 1 // Normal low 0 or normal high 1
 
 // This parameter sets the delay time before disabling the steppers after the final block of movement.
 // A short delay ensures the steppers come to a complete stop and the residual inertial force in the 

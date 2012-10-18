@@ -32,13 +32,11 @@
 #include "stepper.h"
 #include "planner.h"
 
-#define LINE_BUFFER_SIZE 50
-
 static char line[LINE_BUFFER_SIZE]; // Line to be executed. Zero-terminated.
 static uint8_t char_counter; // Last character counter in line variable.
 static uint8_t iscomment; // Comment/block delete flag for processor to ignore comment characters.
 
-static void status_message(int status_code) 
+void protocol_status_message(int8_t status_code) 
 {
   if (status_code == 0) {
     printPgmString(PSTR("ok\r\n"));
@@ -75,7 +73,7 @@ void protocol_status_report()
  // may be distance to go on block, processed block id, and feed rate. A secondary, non-critical
  // status report may include g-code state, i.e. inch mode, plane mode, absolute mode, etc. 
  //   The report generated must be as short as possible, yet still provide the user easily readable
- // information, i.e. 'x0.23,y120.4,z2.4'. This is necessary as it minimizes the computational 
+ // information, i.e. '[0.23,120.4,2.4]'. This is necessary as it minimizes the computational 
  // overhead and allows grbl to keep running smoothly, especially with g-code programs with fast, 
  // short line segments and interface setups that require real-time status reports (5-20Hz).
 
@@ -87,24 +85,33 @@ void protocol_status_report()
  // home position by the user (likely through '$' setting interface).
  // Successfully tested at a query rate of 10-20Hz while running a gauntlet of programs at various 
  // speeds.
- int32_t print_position[3];
- memcpy(print_position,sys.position,sizeof(sys.position));
- #if REPORT_INCH_MODE
-   printString("MPos:["); printFloat(print_position[X_AXIS]/(settings.steps_per_mm[X_AXIS]*MM_PER_INCH));
-   printString(","); printFloat(print_position[Y_AXIS]/(settings.steps_per_mm[Y_AXIS]*MM_PER_INCH));
-   printString(","); printFloat(print_position[Z_AXIS]/(settings.steps_per_mm[Z_AXIS]*MM_PER_INCH));
-   printString("],WPos:["); printFloat((print_position[X_AXIS]/settings.steps_per_mm[X_AXIS]-sys.coord_system[sys.coord_select][X_AXIS]-sys.coord_offset[X_AXIS])/MM_PER_INCH);
-   printString(","); printFloat((print_position[Y_AXIS]/settings.steps_per_mm[Y_AXIS]-sys.coord_system[sys.coord_select][Y_AXIS]-sys.coord_offset[Y_AXIS])/MM_PER_INCH);
-   printString(","); printFloat((print_position[Z_AXIS]/settings.steps_per_mm[Z_AXIS]-sys.coord_system[sys.coord_select][Z_AXIS]-sys.coord_offset[Z_AXIS])/MM_PER_INCH);
- #else
-   printString("MPos:["); printFloat(print_position[X_AXIS]/(settings.steps_per_mm[X_AXIS]));
-   printString(","); printFloat(print_position[Y_AXIS]/(settings.steps_per_mm[Y_AXIS]));
-   printString(","); printFloat(print_position[Z_AXIS]/(settings.steps_per_mm[Z_AXIS]));
-   printString("],WPos:["); printFloat(print_position[X_AXIS]/settings.steps_per_mm[X_AXIS]-sys.coord_system[sys.coord_select][X_AXIS]-sys.coord_offset[X_AXIS]);
-   printString(","); printFloat(print_position[Y_AXIS]/settings.steps_per_mm[Y_AXIS]-sys.coord_system[sys.coord_select][Y_AXIS]-sys.coord_offset[Y_AXIS]);
-   printString(","); printFloat(print_position[Z_AXIS]/settings.steps_per_mm[Z_AXIS]-sys.coord_system[sys.coord_select][Z_AXIS]-sys.coord_offset[Z_AXIS]);
- #endif
- printString("]\r\n");
+ uint8_t i;
+ int32_t current_position[3]; // Copy current state of the system position variable
+ memcpy(current_position,sys.position,sizeof(sys.position));
+ float print_position[3];
+
+ // Report machine position
+ printPgmString(PSTR("MPos:[")); 
+ for (i=0; i<= 2; i++) {
+   print_position[i] = current_position[i]/settings.steps_per_mm[i];
+   if (bit_istrue(settings.flags,BITFLAG_REPORT_INCHES)) { print_position[i] *= INCH_PER_MM; }
+   printFloat(print_position[i]);
+   if (i < 2) { printPgmString(PSTR(",")); }
+ }
+ 
+ // Report work position
+ printPgmString(PSTR("],WPos:[")); 
+ for (i=0; i<= 2; i++) {
+   if (bit_istrue(settings.flags,BITFLAG_REPORT_INCHES)) {
+     print_position[i] -= (sys.coord_system[sys.coord_select][i]+sys.coord_offset[i])*INCH_PER_MM;
+   } else {
+     print_position[i] -= sys.coord_system[sys.coord_select][i]+sys.coord_offset[i];
+   }
+   printFloat(print_position[i]);
+   if (i < 2) { printPgmString(PSTR(",")); }
+ }
+   
+ printPgmString(PSTR("]\r\n"));
 }
 
 
@@ -131,6 +138,12 @@ void protocol_execute_runtime()
 {
   if (sys.execute) { // Enter only if any bit flag is true
     uint8_t rt_exec = sys.execute; // Avoid calling volatile multiple times
+    
+    // System alarm. Something has gone wrong. Disable everything until system reset.
+    if (rt_exec & EXEC_ALARM) {
+      while (bit_isfalse(sys.execute,EXEC_RESET)) { sleep_mode(); }
+      bit_false(sys.execute,EXEC_ALARM);
+    } 
   
     // System abort. Steppers have already been force stopped.
     if (rt_exec & EXEC_RESET) {
@@ -159,12 +172,12 @@ void protocol_execute_runtime()
     
     if (rt_exec & EXEC_CYCLE_START) { 
       st_cycle_start(); // Issue cycle start command to stepper subsystem
-      #ifdef CYCLE_AUTO_START
+      if (bit_istrue(settings.flags,BITFLAG_AUTO_START)) {
         sys.auto_start = true; // Re-enable auto start after feed hold.
-      #endif
+      }
       bit_false(sys.execute,EXEC_CYCLE_START);
-    } 
-  }
+    }
+  }  
 }  
 
 
@@ -220,10 +233,10 @@ void protocol_process()
 
       if (char_counter > 0) {// Line is complete. Then execute!
         line[char_counter] = 0; // Terminate string
-        status_message(protocol_execute_line(line));
+        protocol_status_message(protocol_execute_line(line));
       } else { 
         // Empty or comment line. Skip block.
-        status_message(STATUS_OK); // Send status message for syncing purposes.
+        protocol_status_message(STATUS_OK); // Send status message for syncing purposes.
       }
       char_counter = 0; // Reset line buffer index
       iscomment = false; // Reset comment flag

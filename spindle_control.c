@@ -32,19 +32,24 @@ static uint8_t current_direction;
 
 void spindle_init()
 {
+#ifdef SPINDLE_PRESENT
   current_direction = 0;
   SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT);
   SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT);  
   spindle_stop();
+#endif
 }
 
 void spindle_stop()
 {
+#ifdef SPINDLE_PRESENT
   SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT);
+#endif
 }
 
 void spindle_run(int8_t direction, uint16_t rpm) 
 {
+#ifdef SPINDLE_PRESENT
   if (direction != current_direction) {
     plan_synchronize();
     if (direction) {
@@ -59,4 +64,5 @@ void spindle_run(int8_t direction, uint16_t rpm)
     }
     current_direction = direction;
   }
+#endif
 }

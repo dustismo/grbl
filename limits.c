@@ -30,6 +30,7 @@
 #include "motion_control.h"
 #include "planner.h"
 #include "protocol.h"
+#include "limits.h"
 
 #include "print.h"
 #include <avr/pgmspace.h>
@@ -40,7 +41,30 @@ void limits_init()
 {
   LIMIT_DDR &= ~(LIMIT_MASK); // Set as input pins
   LIMIT_PORT |= (LIMIT_MASK); // Enable internal pull-up resistors. Normal high operation.
+
+  if bit_istrue(settings.flags,BITFLAG_HARD_LIMIT_ENABLE) {
+    MCUCR = (1<<ISC01) | (0<<ISC00); //1 0 triggers at a falling edge.
+    LIMIT_PCMSK |= LIMIT_MASK;   // Enable specific pins of the Pin Change Interrupt
+    PCICR |= (1 << LIMIT_INT);   // Enable Pin Change Interrupt
+  }
 }
+
+// This is the Limit Pin Change Interrupt, which handles the hard limit feature. This is
+// called when Grbl detects a falling edge on a limit pin.
+// NOTE: Do not attach an e-stop to the limit pins, because this interrupt is disabled during
+// homing cycles and will not respond correctly. Upon user request or need, there may be a
+// special pinout for an e-stop, but it is generally recommended to just directly connect
+// your e-stop switch to the Arduino reset pin, since it is the most correct way to do this.
+ISR(LIMIT_INT_vect) 
+{
+  // Kill all processes upon hard limit event.
+  st_go_idle(); // Immediately stop stepper motion
+  spindle_stop(); // Stop spindle
+  sys.auto_start = false; // Disable auto cycle start.
+  sys.execute |= EXEC_ALARM;
+  // TODO: When Grbl system status is installed, update here to indicate loss of position.
+}
+
 
 // Moves all specified axes in same specified direction (positive=true, negative=false)
 // and at the homing rate. Homing is a special motion case, where there is only an 
@@ -81,9 +105,11 @@ static void homing_cycle(bool x_axis, bool x2_axis, bool y_axis, bool z_axis, in
   
   // Nominal and initial time increment per step. Nominal should always be greater then 3
   // usec, since they are based on the same parameters as the main stepper routine. Initial
-  // is based on the MINIMUM_STEPS_PER_MINUTE config.
+  // is based on the MINIMUM_STEPS_PER_MINUTE config. Since homing feed can be very slow,
+  // disable acceleration when rates are below MINIMUM_STEPS_PER_MINUTE.
   uint32_t dt_min = lround(1000000*60/(ds*homing_rate)); // Cruising (usec/step)
   uint32_t dt = 1000000*60/MINIMUM_STEPS_PER_MINUTE; // Initial (usec/step)
+  if (dt > dt_min) { dt = dt_min; } // Disable acceleration for very slow rates.
   printInteger(dt_min); printPgmString(PSTR(" dt min\r\n")); 
   printInteger(dt); printPgmString(PSTR(" dt\r\n")); 
 
@@ -95,9 +121,8 @@ static void homing_cycle(bool x_axis, bool x2_axis, bool y_axis, bool z_axis, in
   
   // Set default out_bits. 
   uint8_t out_bits0 = settings.invert_mask;
+  out_bits0 ^= (settings.homing_dir_mask & DIRECTION_MASK); // Apply homing direction settings
   if (!pos_dir) { out_bits0 ^= DIRECTION_MASK; }   // Invert bits, if negative dir.
-  
-
   
   // Initialize stepping variables
   int32_t counter_x = -(step_event_count >> 1); // Bresenham counters
@@ -108,7 +133,6 @@ static void homing_cycle(bool x_axis, bool x2_axis, bool y_axis, bool z_axis, in
   uint32_t trap_counter = MICROSECONDS_PER_ACCELERATION_TICK/2; // Acceleration trapezoid counter
   uint8_t out_bits;
   uint8_t limit_state;
-
   for(;;) {
   
     // Reset out bits. Both direction and step pins appropriately inverted and set.
@@ -213,14 +237,14 @@ void limits_go_home()
     }
   }
 
-  #if 0
+  if(settings.stepper_idle_lock_time != 0xff) {
     // Disable steppers by setting stepper disable
   #ifdef STEPPERS_DISABLE_INVERT 
     STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
   #else
     STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
   #endif
+  }
    // enable X2 slave
   STEPPERS_DISABLE_PORT &= ~(1<<X2_DISABLE_BIT);
-  #endif
 }

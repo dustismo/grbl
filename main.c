@@ -19,6 +19,10 @@
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+/* A big thanks to Alden Hart of Synthetos, supplier of grblshield and TinyG, who has
+   been integral throughout the development of the higher level details of Grbl, as well
+   as being a consistent sounding board for the future of accessible and free CNC. */
+
 #include <avr/interrupt.h>
 #include <avr/pgmspace.h>
 #include "config.h"
@@ -46,7 +50,9 @@ int main(void)
 
   memset(&sys, 0, sizeof(sys));  // Clear all system variables
   sys.abort = true;   // Set abort to complete initialization
-                    
+
+  // TODO: When Grbl system status is installed, need to set position lost state upon startup.
+               
   for(;;) {
   
     // Execute system reset upon a system abort, where the main program will return to this loop.
@@ -73,9 +79,7 @@ int main(void)
       protocol_init(); // Clear incoming line data
       plan_init(); // Clear block buffer and planner variables
       gc_init(); // Set g-code parser to default state
-      #ifdef SPINDLE_PRESENT
       spindle_init();
-      #endif
       #ifdef COOLANT_PRESENT
       coolant_init();
       #endif
@@ -91,9 +95,9 @@ int main(void)
       // Set system runtime defaults
       // TODO: Eventual move to EEPROM from config.h when all of the new settings are worked out. 
       // Mainly to avoid having to maintain several different versions.
-      #ifdef CYCLE_AUTO_START
+      if (bit_istrue(settings.flags,BITFLAG_AUTO_START)) {
         sys.auto_start = true;
-      #endif
+      }
       // TODO: Install G20/G21 unit default into settings and load appropriate settings.
     }
     
