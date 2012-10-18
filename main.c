@@ -37,6 +37,7 @@
 #include "limits.h"
 #include "settings.h"
 #include "serial.h"
+#include "MCP23017.h"
 
 // Declare system global variable structure
 system_t sys; 
