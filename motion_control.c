@@ -204,9 +204,12 @@ void mc_go_home()
   limits_go_home(); // Perform homing routine.
 
   // Upon completion, reset all internal position vectors (g-code parser, planner, system)
-  gc_clear_position();
-  plan_clear_position();
-  //clear_vector_float(sys.position); // sys.position is set to zero when switch triggered
+  //   sys.position is set to zero when switch triggered
+  //gc_clear_position();
+  //plan_clear_position();
+  //clear_vector_float(sys.position);
+  gc_set_current_position(sys.position[X_AXIS],sys.position[Y_AXIS],sys.position[Z_AXIS]);
+  plan_set_current_position(sys.position[X_AXIS],sys.position[Y_AXIS],sys.position[Z_AXIS]);
   
   // If hard limits enabled, move all axes off limit switches before enabling the hard limit
   // pin change interrupt. This should help prevent the switches from falsely tripping.
