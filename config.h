@@ -26,46 +26,39 @@
 
 #define BAUD_RATE 9600
 
-
 // Define pin-assignments
-#define STEPPING_DDR       DDRB
-#define STEPPING_PORT      PORTB
-#define X_STEP_BIT         5  // Uno Digital Pin 13
-#define Y_STEP_BIT         3  // Uno Digital Pin 11
-#define Z_STEP_BIT         1  // Uno Digital Pin 9
-#define X_DIRECTION_BIT    4  // Uno Digital Pin 12
-#define Y_DIRECTION_BIT    2  // Uno Digital Pin 10
-#define Z_DIRECTION_BIT    0  // Uno Digital Pin 8
+#define STEPPING_DDR       DDRD
+#define STEPPING_PORT      PORTD
+#define X_STEP_BIT         2  // Uno Digital Pin 2
+#define Y_STEP_BIT         3  // Uno Digital Pin 3
+#define Z_STEP_BIT         4  // Uno Digital Pin 4
+#define X_DIRECTION_BIT    5  // Uno Digital Pin 5
+#define Y_DIRECTION_BIT    6  // Uno Digital Pin 6
+#define Z_DIRECTION_BIT    7  // Uno Digital Pin 7
 
-#define STEPPERS_DISABLE_DDR    DDRD
-#define STEPPERS_DISABLE_PORT   PORTD
-#define STEPPERS_DISABLE_BIT    4  // Uno Digital Pin 4
+#define STEPPERS_DISABLE_DDR    DDRB
+#define STEPPERS_DISABLE_PORT   PORTB
+#define STEPPERS_DISABLE_BIT    0  // Uno Digital Pin 8
 #define STEPPERS_DISABLE_INVERT_MASK  0
 
-#define LIMIT_DDR     DDRD
-#define LIMIT_PIN     PIND
-#define HOME_PIN      PIND
-#define LIMIT_PORT    PORTD
-#define X_LIMIT_BIT   7  // Uno Digital Pin 7
-#define Y_LIMIT_BIT   6  // Uno Digital Pin 6
-#define Z_LIMIT_BIT   5  // Uno Digital Pin 5
-#define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
-#define X_HOME_BIT   7  // Uno Digital Pin 7
-#define Y_HOME_BIT   6  // Uno Digital Pin 6
-#define Z_HOME_BIT   5  // Uno Digital Pin 5
-#define X2_HOME_BIT  2  // Uno Digital Pin 2 (INT0)
-#define LIMIT_INT       PCIE0  // Pin change interrupt settings
-#define LIMIT_INT_vect  PCINT0_vect
-#define LIMIT_PCMSK     PCMSK0
+#define LIMIT_DDR       DDRB
+#define LIMIT_PIN       PINB
+#define LIMIT_PORT      PORTB
+#define X_LIMIT_BIT     1  // Uno Digital Pin 9
+#define Y_LIMIT_BIT     2  // Uno Digital Pin 10
+#define Z_LIMIT_BIT     3  // Uno Digital Pin 11
+#define LIMIT_INT       PCIE0  // Pin change interrupt enable pin
+#define LIMIT_INT_vect  PCINT0_vect 
+#define LIMIT_PCMSK     PCMSK0 // Pin change interrupt register
 
 #define SPINDLE_PRESENT
-#define SPINDLE_ENABLE_DDR DDRD
-#define SPINDLE_ENABLE_PORT PORTD
-#define SPINDLE_ENABLE_BIT 3  // Uno Digital Pin 3
+#define SPINDLE_ENABLE_DDR   DDRB
+#define SPINDLE_ENABLE_PORT  PORTB
+#define SPINDLE_ENABLE_BIT   4  // Uno Digital Pin 12
 
-#define SPINDLE_DIRECTION_DDR DDRD
-#define SPINDLE_DIRECTION_PORT PORTD
-#define SPINDLE_DIRECTION_BIT 1  // Uno Digital Pin 13
+#define SPINDLE_DIRECTION_DDR   DDRB
+#define SPINDLE_DIRECTION_PORT  PORTB
+#define SPINDLE_DIRECTION_BIT   5  // Uno Digital Pin 13
 
 #define COOLANT_PRESENT
 #define COOLANT_FLOOD_DDR   DDRC
@@ -114,7 +107,7 @@
 // slower than this value, except when sleeping. This parameter overrides the minimum planner speed.
 // This is primarily used to guarantee that the end of a movement is always reached and not stop to
 // never reach its target. This parameter should always be greater than zero.
-#define MINIMUM_STEPS_PER_MINUTE 400 // (steps/min) - Integer value only
+#define MINIMUM_STEPS_PER_MINUTE 800 // (steps/min) - Integer value only
 
 // Number of arc generation iterations by small angle approximation before exact arc trajectory 
 // correction. This parameter maybe decreased if there are issues with the accuracy of the arc
@@ -160,9 +153,10 @@
 // of your successes or difficulties, as we will monitor this and possibly integrate this as a 
 // standard feature for future releases. However, we suggest to first try our direction delay
 // hack/solution posted in the Wiki involving inverting the stepper pin mask.
-// NOTE: Uncomment to enable. The recommended delay should be > 3us and the total step pulse
-// time, which includes the Grbl settings pulse microseconds, should not exceed 127us.
-// #define STEP_PULSE_DELAY 5 // Step pulse delay in microseconds. Default disabled.
+// NOTE: Uncomment to enable. The recommended delay must be > 3us and the total step pulse
+// time, which includes the Grbl settings pulse microseconds, must not exceed 127us. Reported
+// successful values for certain setups have ranged from 10 to 20us.
+// #define STEP_PULSE_DELAY 10 // Step pulse delay in microseconds. Default disabled.
 
 // ---------------------------------------------------------------------------------------
 
@@ -177,7 +171,8 @@
 // entering g-code into grbl, i.e. locating part zero or simple manual machining. If the axes drift,
 // grbl has no way to know this has happened, since stepper motors are open-loop control. Depending
 // on the machine, this parameter may need to be larger or smaller than the default time.
-// NOTE: If the define commented, the stepper lock will be disabled upon compiling.
+// NOTE: If set to zero, no lock will occur. If set to max 255, the lock will never release, in other
+// words, the steppers never disable for users that require this.
 // -> NOW INSTALLED IN SETTINGS #define STEPPER_IDLE_LOCK_TIME 25 // (milliseconds) - Integer > 0
 
 

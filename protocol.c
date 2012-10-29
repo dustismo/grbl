@@ -36,32 +36,58 @@ static char line[LINE_BUFFER_SIZE]; // Line to be executed. Zero-terminated.
 static uint8_t char_counter; // Last character counter in line variable.
 static uint8_t iscomment; // Comment/block delete flag for processor to ignore comment characters.
 
-void protocol_status_message(int8_t status_code) 
+// Method to handle status messages, from an 'ok' to report any 'error' that has occurred.
+// Errors can originate from the g-code parser, settings module, or a critical error, such
+// as a triggered hard limit.
+void protocol_status_message(uint8_t status_code) 
 {
-  if (status_code == 0) {
+  // TODO: Compile time option to only return numeric codes for GUIs.
+  if (status_code == 0) { // STATUS_OK
     printPgmString(PSTR("ok\r\n"));
   } else {
     printPgmString(PSTR("error: "));
     switch(status_code) {          
       case STATUS_BAD_NUMBER_FORMAT:
-      printPgmString(PSTR("Bad number format\r\n")); break;
+      printPgmString(PSTR("Bad number format")); break;
       case STATUS_EXPECTED_COMMAND_LETTER:
-      printPgmString(PSTR("Expected command letter\r\n")); break;
+      printPgmString(PSTR("Expected command letter")); break;
       case STATUS_UNSUPPORTED_STATEMENT:
-      printPgmString(PSTR("Unsupported statement\r\n")); break;
+      printPgmString(PSTR("Unsupported statement")); break;
       case STATUS_FLOATING_POINT_ERROR:
-      printPgmString(PSTR("Floating point error\r\n")); break;
+      printPgmString(PSTR("Floating point error")); break;
       case STATUS_MODAL_GROUP_VIOLATION:
-      printPgmString(PSTR("Modal group violation\r\n")); break;
-      case STATUS_INVALID_COMMAND:
-      printPgmString(PSTR("Invalid command\r\n")); break;
+      printPgmString(PSTR("Modal group violation")); break;
+      case STATUS_INVALID_STATEMENT:
+      printPgmString(PSTR("Invalid statement")); break;
+      case STATUS_HARD_LIMIT:
+      printPgmString(PSTR("Limit triggered")); break;
       case STATUS_SETTING_DISABLED:
-      printPgmString(PSTR("Grbl setting disabled\r\n")); break;
-      default:
-      printInteger(status_code);
-      printPgmString(PSTR("\r\n"));
+      printPgmString(PSTR("Grbl setting disabled")); break;
+      case STATUS_SETTING_STEPS_NEG:
+      printPgmString(PSTR("Steps/mm must be > 0.0")); break;
+      case STATUS_SETTING_STEP_PULSE_MIN:
+      printPgmString(PSTR("Step pulse must be >= 3 microseconds")); break;
+      case STATUS_SETTING_READ_FAIL:
+      printPgmString(PSTR("Failed to read EEPROM settings. Using defaults")); break;
     }
+    printPgmString(PSTR("\r\n"));
   }
+}
+
+
+// Prints miscellaneous messages. This serves as a centralized method to provide additional
+// user feedback for things that do not pass through the protocol_execute_line() function
+// and are not errors or confirmations, such as setup warnings and how to exit alarms.
+void protocol_misc_message(uint8_t message_code)
+{
+  // TODO: Install silence misc messages option in settings
+  switch(message_code) {
+    case MESSAGE_SYSTEM_ALARM:
+    printPgmString(PSTR("<ALARM: Reset to continue>")); break;
+    case MESSAGE_HOMING_ENABLE:
+    printPgmString(PSTR("warning: Install all axes limit switches before use")); break;
+  }
+  printPgmString(PSTR("\r\n"));
 }
 
 
@@ -97,10 +123,11 @@ void protocol_status_report()
    if (bit_istrue(settings.flags,BITFLAG_REPORT_INCHES)) { print_position[i] *= INCH_PER_MM; }
    printFloat(print_position[i]);
    if (i < 2) { printPgmString(PSTR(",")); }
+   else { printPgmString(PSTR("]")); }
  }
  
  // Report work position
- printPgmString(PSTR("],WPos:[")); 
+ printPgmString(PSTR(",WPos:[")); 
  for (i=0; i<= 2; i++) {
    if (bit_istrue(settings.flags,BITFLAG_REPORT_INCHES)) {
      print_position[i] -= (sys.coord_system[sys.coord_select][i]+sys.coord_offset[i])*INCH_PER_MM;
@@ -109,9 +136,10 @@ void protocol_status_report()
    }
    printFloat(print_position[i]);
    if (i < 2) { printPgmString(PSTR(",")); }
+   else { printPgmString(PSTR("]")); }
  }
    
- printPgmString(PSTR("]\r\n"));
+ printPgmString(PSTR("\r\n"));
 }
 
 
@@ -131,7 +159,7 @@ void protocol_init()
 // point where the execution time from the last check point may be more than a fraction of a second.
 // This is a way to execute runtime commands asynchronously (aka multitasking) with grbl's g-code
 // parsing and planning functions. This function also serves as an interface for the interrupts to 
-// set the system runtime flags, where only the main program to handles them, removing the need to
+// set the system runtime flags, where only the main program handles them, removing the need to
 // define more computationally-expensive volatile variables.
 // NOTE: The sys.execute variable flags are set by the serial read subprogram, except where noted.
 void protocol_execute_runtime()
@@ -141,6 +169,7 @@ void protocol_execute_runtime()
     
     // System alarm. Something has gone wrong. Disable everything until system reset.
     if (rt_exec & EXEC_ALARM) {
+      if (bit_isfalse(sys.execute,EXEC_RESET)) { protocol_misc_message(MESSAGE_SYSTEM_ALARM); }
       while (bit_isfalse(sys.execute,EXEC_RESET)) { sleep_mode(); }
       bit_false(sys.execute,EXEC_ALARM);
     } 
@@ -214,6 +243,9 @@ uint8_t protocol_execute_line(char *line)
 
   } else {
     return(gc_execute_line(line));    // Everything else is gcode
+    // TODO: Install option to set system alarm upon any error code received back from the
+    // the g-code parser. This is a common safety feature on CNCs to help prevent crashes
+    // if the g-code doesn't perform as intended.
   }
 }
 
