@@ -72,7 +72,7 @@ static uint8_t prev_block_index(uint8_t block_index)
 
 // Calculates the distance (not time) it takes to accelerate from initial_rate to target_rate using the 
 // given acceleration:
-static float estimate_acceleration_distance(float initial_rate, float target_rate, float acceleration) 
+float estimate_acceleration_distance(float initial_rate, float target_rate, float acceleration) 
 {
   return( (target_rate*target_rate-initial_rate*initial_rate)/(2*acceleration) );
 }

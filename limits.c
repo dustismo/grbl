@@ -4,6 +4,7 @@
 
   Copyright (c) 2009-2011 Simen Svale Skogsrud
   Copyright (c) 2012 Sungeun K. Jeon
+  Copyright (c) 2012 Chuck Harrison for http://opensourceecology.org/wiki/CNC_Torch_Table
 
   Grbl is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -65,186 +66,296 @@ ISR(LIMIT_INT_vect)
   // TODO: When Grbl system status is installed, update here to indicate loss of position.
 }
 
-
-// Moves all specified axes in same specified direction (positive=true, negative=false)
-// and at the homing rate. Homing is a special motion case, where there is only an 
-// acceleration followed by abrupt asynchronous stops by each axes reaching their limit 
+// Moves each axis in a trapezoidal move with axis-specific accel, decel, and slew speed
+// Homing is a special motion case, where there is only an 
+// acceleration followed by decelerated stops by each axes reaching their limit 
 // switch independently. Instead of shoehorning homing cycles into the main stepper 
 // algorithm and overcomplicate things, a stripped-down, lite version of the stepper 
 // algorithm is written here. This also lets users hack and tune this code freely for
 // their own particular needs without affecting the rest of Grbl.
+
+// Unlike the main stepper algorithm, there is no coordinated movement between axes
+// The update rate is constant and an independent 2nd-order phase accumulator handles each axis.
+// We share the position counters from the stepper state variable st defined in stepper.c
+
+
 // NOTE: Only the abort runtime command can interrupt this process.
-static void homing_cycle(bool x_axis, bool x2_axis, bool y_axis, bool z_axis, int8_t pos_dir, 
-                         bool invert_pin, float homing_rate) 
+
+
+// these data structures allow independent parameters for each axis
+static struct {
+  float rate[2];
+  float decel;
+  uint8_t accel_ratio;
+} home_params[3];
+
+void home_init() {
+home_params[X_AXIS].rate[0] = settings.homing_seek_rate; // mm/min
+home_params[X_AXIS].rate[1] = settings.homing_feed_rate; // mm/min
+home_params[X_AXIS].decel = home_params[X_AXIS].rate[0]*60./0.1; // mm/min^2; 0.1 sec to stop
+home_params[X_AXIS].accel_ratio = 20;
+home_params[Y_AXIS].rate[0] = settings.homing_seek_rate; // mm/min
+home_params[Y_AXIS].rate[1] = settings.homing_feed_rate; // mm/min
+home_params[Y_AXIS].accel_ratio = 50;
+home_params[Y_AXIS].decel = home_params[Y_AXIS].rate[0]*60./0.5; // mm/min^2; 0.5 sec to stop
+home_params[Z_AXIS].rate[0] = settings.homing_seek_rate; // mm/min
+home_params[Z_AXIS].rate[1] = settings.homing_feed_rate; // mm/min
+home_params[Z_AXIS].accel_ratio = 50;
+home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.25; // mm/min^2; 0.25 sec to stop
+}
+
+inline uint8_t home_limit_state() {
+ return HOME_PIN;
+}
+
+// This function is used inside the Stepper Driver Interrupt when in independent-axis mode
+//   it includes the complete state machine for a trapezoidal move
+bool indep_increment(indep_t_ptr ht)
 {
-        printPgmString(PSTR("..starting homing cycle\r\n")); 
+  if(ht->state==idle || ht->state==done || ht->state==fault)
+    return false;
+  if(!(ht->flags & INDEP_NO_TARGET) && sys.position[ht->axis] == ht->target_pos) {
+    ht->state = done;
+    return false;
+  }
+  if(ht->state==decel) {
+    ht->dpdt -= ht->d2pdt2d;
+    if(ht->dpdt<=0) {
+      if((ht->flags & INDEP_HOMING) || sys.feed_hold) {
+        ht->state = done;
+        return false;
+      } else {
+        ht->dpdt = ht->dpdt_min;
+      }
+    }
+  }
+  if(ht->state==accel) {
+    ht->dpdt += ht->d2pdt2a;
+    if(ht->dpdt>=ht->dpdt_max) {
+      ht->dpdt = ht->dpdt_max;
+      ht->state = slew;
+    }
+  }
+  if(ht->state!= decel) {
+    if((ht->flags & INDEP_HOMING) 
+       && (ht->home_mask & (home_limit_state()^ ht->home_nullstate)) ) {
+      ht->state = decel;
+      sys.position[ht->axis] = 0;
+      ht->flags |= INDEP_HIT_HOME;
+    } else if ( (!(ht->flags & INDEP_NO_TARGET)
+                && (sys.position[ht->axis]==ht->decel_pos))
+               || sys.feed_hold ) {
+      ht->state = decel;
+    }
+  }
+  return true;
+}
 
-  // Determine governing axes with finest step resolution per distance for the Bresenham
-  // algorithm. This solves the issue when homing multiple axes that have different 
-  // resolutions without exceeding system acceleration setting. It doesn't have to be
-  // perfect since homing locates machine zero, but should create for a more consistent 
-  // and speedy homing routine.
-  // NOTE: For each axes enabled, the following calculations assume they physically move 
-  // an equal distance over each time step until they hit a limit switch, aka dogleg.
-  uint32_t steps[3];
-  clear_vector(steps);
-  if (x_axis) { steps[X_AXIS] = lround(settings.steps_per_mm[X_AXIS]); }
-  if (y_axis) { steps[Y_AXIS] = lround(settings.steps_per_mm[Y_AXIS]); }
-  if (z_axis) { steps[Z_AXIS] = lround(settings.steps_per_mm[Z_AXIS]); }
-  uint32_t step_event_count = max(steps[X_AXIS], max(steps[Y_AXIS], steps[Z_AXIS]));  
-  
-  // To ensure global acceleration is not exceeded, reduce the governing axes nominal rate
-  // by adjusting the actual axes distance traveled per step. This is the same procedure
-  // used in the main planner to account for distance traveled when moving multiple axes.
-  // NOTE: When axis acceleration independence is installed, this will be updated to move
-  // all axes at their maximum acceleration and rate.
-  float ds = step_event_count/sqrt(x_axis+y_axis+z_axis);
-
-  // Compute the adjusted step rate change with each acceleration tick. (in step/min/acceleration_tick)
-  uint32_t delta_rate = ceil( ds*settings.acceleration/(60*ACCELERATION_TICKS_PER_SECOND));
-  
-  // Nominal and initial time increment per step. Nominal should always be greater then 3
-  // usec, since they are based on the same parameters as the main stepper routine. Initial
-  // is based on the MINIMUM_STEPS_PER_MINUTE config. Since homing feed can be very slow,
-  // disable acceleration when rates are below MINIMUM_STEPS_PER_MINUTE.
-  uint32_t dt_min = lround(1000000*60/(ds*homing_rate)); // Cruising (usec/step)
-  uint32_t dt = 1000000*60/MINIMUM_STEPS_PER_MINUTE; // Initial (usec/step)
-  if (dt > dt_min) { dt = dt_min; } // Disable acceleration for very slow rates.
-  printInteger(dt_min); printPgmString(PSTR(" dt min\r\n")); 
-  printInteger(dt); printPgmString(PSTR(" dt\r\n")); 
-
-  // Set X2 enable
-  if(x2_axis)
-    STEPPERS_DISABLE_PORT &= ~(1<<X2_DISABLE_BIT);
-  else
-    STEPPERS_DISABLE_PORT |= (1<<X2_DISABLE_BIT);
-  
-  // Set default out_bits. 
-  uint8_t out_bits0 = settings.invert_mask;
-  out_bits0 ^= (settings.homing_dir_mask & DIRECTION_MASK); // Apply homing direction settings
-  if (!pos_dir) { out_bits0 ^= DIRECTION_MASK; }   // Invert bits, if negative dir.
-  
-  // Initialize stepping variables
-  int32_t counter_x = -(step_event_count >> 1); // Bresenham counters
-  int32_t counter_y = counter_x;
-  int32_t counter_z = counter_x;
-  uint32_t step_delay = dt-settings.pulse_microseconds;  // Step delay after pulse
-  uint32_t step_rate = 0;  // Tracks step rate. Initialized from 0 rate. (in step/min)
-  uint32_t trap_counter = MICROSECONDS_PER_ACCELERATION_TICK/2; // Acceleration trapezoid counter
-  uint8_t out_bits;
-  uint8_t limit_state;
+// Start the stepper driver in independent mode, and wait for it to complete
+static void run_independent_move(indep_t_ptr frame) { 
   for(;;) {
-  
-    // Reset out bits. Both direction and step pins appropriately inverted and set.
-    out_bits = out_bits0;
-    
-    // Get limit pin state.
-    limit_state = LIMIT_PIN;
-    if (invert_pin) { limit_state ^= LIMIT_MASK; } // If leaving switch, invert to move.
-    
-    // Set step pins by Bresenham line algorithm. If limit switch reached, disable and
-    // flag for completion.
-    if (x_axis) {
-      counter_x += steps[X_AXIS];
-      if (counter_x > 0) {
-        if (x2_axis && (limit_state & (1<<X2_LIMIT_BIT)) )
-           { out_bits ^= (1<<X_STEP_BIT); }
-        else if (!x2_axis && (limit_state & (1<<X_LIMIT_BIT)) )
-           { out_bits ^= (1<<X_STEP_BIT); }
-        else { x_axis = false; 
-               printPgmString(PSTR("...x limit reached\r\n"));  }
-        counter_x -= step_event_count;
-      }
+    if(!indep_mode) {
+      st_indep_start(frame);
     }
-    if (y_axis) {
-      counter_y += steps[Y_AXIS];
-      if (counter_y > 0) {
-        if (limit_state & (1<<Y_LIMIT_BIT)) { out_bits ^= (1<<Y_STEP_BIT); }
-        else { y_axis = false;  
-               printPgmString(PSTR("...y limit reached\r\n")); }
-        counter_y -= step_event_count;
-      }
-    }
-    if (z_axis) {
-      counter_z += steps[Z_AXIS];
-      if (counter_z > 0) {
-        if (limit_state & (1<<Z_LIMIT_BIT)) { out_bits ^= (1<<Z_STEP_BIT); }
-        else { z_axis = false;  
-               printPgmString(PSTR("...z limit reached\r\n")); }
-        counter_z -= step_event_count;
-      }
-    }        
-    
     // Check if we are done or for system abort
     protocol_execute_runtime();
-    if (!(x_axis || y_axis || z_axis) || sys.abort) { return; }
-        
-    // Perform step.
-    STEPPING_PORT = (STEPPING_PORT & ~STEP_MASK) | (out_bits & STEP_MASK);
-    delay_us(settings.pulse_microseconds);
-    STEPPING_PORT = out_bits0;
-    delay_us(step_delay);
-    
-    // Track and set the next step delay, if required. This routine uses another Bresenham
-    // line algorithm to follow the constant acceleration line in the velocity and time 
-    // domain. This is a lite version of the same routine used in the main stepper program.
-    if (dt > dt_min) { // Unless cruising, check for time update.
-      trap_counter += dt; // Track time passed since last update.
-      if (trap_counter > MICROSECONDS_PER_ACCELERATION_TICK) {
-        trap_counter -= MICROSECONDS_PER_ACCELERATION_TICK;
-        step_rate += delta_rate; // Increment velocity
-        dt = (1000000*60)/step_rate; // Compute new time increment
-        if (dt < dt_min) {dt = dt_min;}  // If target rate reached, cruise.
-        step_delay = dt-settings.pulse_microseconds;
-      }
+    bool complete = true;   
+    indep_t_ptr it = frame;
+    while(it) {
+      if(it->state==accel || it->state==slew || it->state==decel) {
+        complete = false; }
+      it = it->next_axis;
+    }
+    if(complete || sys.abort) {
+      st_go_idle();
+      indep_mode = false;
+      return;
     }
   }
 }
 
+// some mnemonics for homing_cycle function arguments
+const uint8_t ax_stop=0, ax_fast=1, ax_slow=2; // axis movment speed
+const uint8_t slave_stop=0, slave_run=1, slave_run_watch_both=2; // x2 axis
+const uint8_t dir_pos=1, dir_neg=0;
+void homing_cycle(uint8_t x_axis, uint8_t x2_axis, uint8_t y_axis, uint8_t z_axis, uint8_t pos_dir) 
+{
+  uint8_t n = (x_axis!=0) + (y_axis!=0) + (z_axis!=0);
+  if(n==0) { return; }
+
+  uint32_t dt = 1000000L/HOME_EVENTS_PER_SECOND; // usec/step
+
+  // Set default out_bits for stepper drive directions.
+  out_bits0 = (out_bits0 & ~DIRECTION_MASK)
+              | (settings.homing_dir_mask & DIRECTION_MASK); // Apply homing direction settings
+  if (!pos_dir) { out_bits0 ^= DIRECTION_MASK; }   // Invert bits, if negative dir.
+  
+  // enable stepper drives (optionally enable slave axis X2)
+  uint8_t disable_bits_to_set;
+  if(x2_axis) { disable_bits_to_set = STEPPERS_DISABLE_INVERT_MASK & STEPPERS_DISABLE_MASK; }
+  else { disable_bits_to_set = (STEPPERS_DISABLE_INVERT_MASK^(1<<X2_DISABLE_BIT)) & STEPPERS_DISABLE_MASK; }
+  STEPPERS_DISABLE_PORT = (STEPPERS_DISABLE_PORT & ~STEPPERS_DISABLE_MASK) | disable_bits_to_set;
+
+  // Create the n frames defining n independent movements (n = number of axes moving)
+  struct indep_t hm[n];
+  
+  uint8_t ax, ax_val=0;
+  indep_t_ptr prev = NULL;
+  indep_t_ptr this_axis = &hm[0];
+  for(ax=0; ax<3; ax++) {
+    switch(ax) {
+    case X_AXIS:
+      ax_val = x_axis;
+      if(ax_val==0) continue;
+      if(x2_axis) {
+        this_axis->home_mask = 1<<X2_HOME_BIT;
+        if(x2_axis==slave_run_watch_both) {
+          this_axis->home_mask |= 1<<X_HOME_BIT;
+        }
+      } else {
+        this_axis->home_mask = 1<<X_HOME_BIT;
+      }
+      break;
+    case Y_AXIS:
+      ax_val = y_axis;
+      if(ax_val==0) continue;
+      this_axis->home_mask = 1<<Y_HOME_BIT;
+      break;
+    case Z_AXIS:
+      ax_val = z_axis;
+      if(ax_val==0) continue;
+      this_axis->home_mask = 1<<Z_HOME_BIT;
+      break;
+    }
+    this_axis->axis = ax;
+    this_axis->target_pos = 0;
+    this_axis->decel_pos = 0;
+    this_axis->dpdt = 0; // rate, phase LSB's/tick
+    this_axis->d2pdt2d = (uint32_t)(INDEP_EVENT_COUNT/(1000000.*60.*1000000.*60.)
+                                    *home_params[ax].decel*settings.steps_per_mm[ax]*dt*dt);
+    this_axis->d2pdt2a = (uint32_t)( (this_axis->d2pdt2d*home_params[ax].accel_ratio)/100 );
+    this_axis->dpdt_max = (uint32_t)(INDEP_EVENT_COUNT/(1000000.*60.)
+                                     *home_params[ax].rate[ax_val-1]*settings.steps_per_mm[ax]*dt);
+    this_axis->dpdt_min = (uint32_t)(INDEP_EVENT_COUNT/(1000000.*60.)*MINIMUM_STEPS_PER_MINUTE*dt);
+    this_axis->home_nullstate = pos_dir ? 0 : 0xFF;
+    this_axis->state = accel;
+    this_axis->flags = INDEP_HOMING | INDEP_NO_TARGET;
+    this_axis->next_axis = NULL;
+    this_axis->prev_axis = prev;
+    if(prev) {
+      prev->next_axis = this_axis;
+    }
+    prev = this_axis;
+    this_axis++;
+  }
+  
+  run_independent_move(hm);
+}
 
 void limits_go_home() 
 {
   plan_synchronize();  // Empty all motions in buffer.
-  
-    // Enable steppers by resetting the stepper disable port
-  #ifdef STEPPERS_DISABLE_INVERT
-    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
-  #else
-    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
-  #endif
-  
-  // Jog all axes toward home to engage their limit switches at faster homing seek rate.
-  homing_cycle(false, false, false, true, true, false, settings.homing_seek_rate); // First jog the z axis
-  homing_cycle(true, true, true, false, true, false, settings.homing_seek_rate);   // Then jog the x and y axis
-  delay_ms(settings.homing_debounce_delay); // Delay to debounce signal
-    
-  // Now in proximity of all limits. Carefully leave and approach switches in multiple cycles
-  // to precisely hone in on the machine zero location. Moves at slower homing feed rate.
+  // Z axis homing
+  homing_cycle(ax_stop, slave_stop, ax_stop, ax_fast, dir_neg); // z axis approach home
+  homing_cycle(ax_stop, slave_stop, ax_stop, ax_slow, dir_pos); // z back off
+  // could move to clear position here
+  homing_cycle(ax_fast, slave_run_watch_both, ax_fast, ax_stop, dir_neg); // x and y axis approach home
+  homing_cycle(ax_stop, slave_stop, ax_slow, ax_stop, dir_pos); // y back off 
+  // x axis master/slave homing
+  // jog back and forth until slave enters home first
+  while(!(home_limit_state() & (1<<X_HOME_BIT))) { // master in home, slave not
+    homing_cycle(ax_slow, slave_stop, ax_stop, ax_stop, dir_pos); // back out master only 
+    homing_cycle(ax_slow, slave_run_watch_both, ax_stop, ax_stop, dir_neg); // try again
+  } 
+  // now square up x axis
   int8_t n_cycle = N_HOMING_CYCLE;
   while (n_cycle--) {
-    // Leave all switches to release them. After cycles complete, this is machine zero.
-    homing_cycle(true, false, false, false, true, false, settings.homing_feed_rate);
-    delay_ms(settings.homing_debounce_delay);
-    homing_cycle(true, true, true, true, false, true, settings.homing_feed_rate);
-    delay_ms(settings.homing_debounce_delay);
+    // using both motors, find slave home switch departure
+    homing_cycle(ax_slow, slave_run, ax_stop, ax_stop, dir_neg);
+    homing_cycle(ax_slow, slave_run, ax_stop, ax_stop, dir_pos);
+    // using master motor only, find master home switch departure
+    homing_cycle(ax_slow, slave_stop, ax_stop, ax_stop, dir_neg);
+    homing_cycle(ax_slow, slave_stop, ax_stop, ax_stop, dir_pos);
+  }   
+#if 0
+  // sample code to test independent point-to-point positioning
+  //  bug warning: this isn't reliable when all 3 axes are commanded
+  uint8_t x_axis=0, y_axis=1, z_axis=1;
+  uint8_t n = (x_axis!=0) + (y_axis!=0) + (z_axis!=0);
+  uint32_t dt = 1000000L/HOME_EVENTS_PER_SECOND; // usec/step
+  out_bits0 = (out_bits0 & ~DIRECTION_MASK);
+  STEPPERS_DISABLE_PORT = (STEPPERS_DISABLE_PORT & ~STEPPERS_DISABLE_MASK)
+                          | (STEPPERS_DISABLE_INVERT_MASK & STEPPERS_DISABLE_MASK);
+                          
+  // Create the n frames defining n independent movements (n = number of axes moving)
+  struct indep_t hm[n];
+  uint8_t ax, ax_val=0;
+  indep_t_ptr prev = NULL;
+  indep_t_ptr this_axis = &hm[0];
+  
+  for(ax=0; ax<3; ax++) {
+    int32_t start_pos = sys.position[ax];
+    int32_t target_pos = -50.*(ax+1)*settings.steps_per_mm[ax];
+    bool negative_move = (target_pos < start_pos);
     
-    if (n_cycle > 0) {
-      homing_cycle(true, false, false, false, false, true, settings.homing_feed_rate);
-      delay_ms(settings.homing_debounce_delay);
-     // Re-approach all switches to re-engage them.
-      homing_cycle(true, true, true, true, true, false, settings.homing_feed_rate);
-      delay_ms(settings.homing_debounce_delay);
+    switch(ax) {
+    case X_AXIS:
+      ax_val = x_axis;
+      if(ax_val==0) continue;
+      out_bits0 |= (1<<X_DIRECTION_BIT)
+                   & (negative_move ? ~settings.invert_mask
+                                    : settings.invert_mask);
+      break;
+    case Y_AXIS:
+      ax_val = y_axis;
+      if(ax_val==0) continue;
+      out_bits0 |= (1<<Y_DIRECTION_BIT)
+                   & (negative_move ? ~settings.invert_mask
+                                    : settings.invert_mask);
+      break;
+    case Z_AXIS:
+      ax_val = z_axis;
+      if(ax_val==0) continue;
+      out_bits0 |= (1<<Z_DIRECTION_BIT)
+                   & (negative_move ? ~settings.invert_mask
+                                    : settings.invert_mask);
+      break;
     }
+    this_axis->axis = ax;
+    this_axis->target_pos = target_pos;
+    
+    // mm position from end at which we would need to start decelerating if no plateau
+    float decel_dist_no_slew =  ( (this_axis->target_pos - start_pos)/settings.steps_per_mm[ax] )
+                              *( 1. - 1./(1. + home_params[ax].accel_ratio/100.) );
+    if(negative_move) { decel_dist_no_slew *= -1.; }
+    // mm position from end at which we would need to start decelerating from plateau
+    float decel_dist_from_slew = home_params[ax].rate[ax_val-1]*home_params[ax].rate[ax_val-1]
+                                 /(2.* home_params[ax].decel);
+    float decel_dist = ((decel_dist_no_slew) < (decel_dist_from_slew)) ? (decel_dist_no_slew) : (decel_dist_from_slew);
+    this_axis->decel_pos = this_axis->target_pos
+                           - (int32_t)(decel_dist*settings.steps_per_mm[ax]
+                                       *(negative_move ? -1.0 : 1.0));
+                           
+    this_axis->dpdt = 0; // rate, LSB's/tick
+    this_axis->d2pdt2d = (uint32_t)(INDEP_EVENT_COUNT/(1000000.*60.*1000000.*60.)
+                                    *home_params[ax].decel*settings.steps_per_mm[ax]*dt*dt);
+    this_axis->d2pdt2a = (uint32_t)( (this_axis->d2pdt2d*home_params[ax].accel_ratio)/100 );
+    this_axis->dpdt_max = (uint32_t)(INDEP_EVENT_COUNT/(1000000.*60.)
+                                     *home_params[ax].rate[ax_val-1]*settings.steps_per_mm[ax]*dt);
+    this_axis->dpdt_min = (uint32_t)(INDEP_EVENT_COUNT/(1000000.*60.)*MINIMUM_STEPS_PER_MINUTE*dt);
+    this_axis->home_nullstate = 0;
+    this_axis->state = accel;
+    this_axis->flags = 0;
+    this_axis->next_axis = NULL;
+    this_axis->prev_axis = prev;
+    if(prev) {
+      prev->next_axis = this_axis;
+    }
+    prev = this_axis;
+    this_axis++;
   }
+  run_independent_move(hm);
+#endif  
 
-  if(settings.stepper_idle_lock_time != 0xff) {
-    // Disable steppers by setting stepper disable
-  #ifdef STEPPERS_DISABLE_INVERT 
-    STEPPERS_DISABLE_PORT &= ~(1<<STEPPERS_DISABLE_BIT);
-  #else
-    STEPPERS_DISABLE_PORT |= (1<<STEPPERS_DISABLE_BIT);
-  #endif
-  }
-   // enable X2 slave
-  STEPPERS_DISABLE_PORT &= ~(1<<X2_DISABLE_BIT);
+  st_go_idle();
 }

@@ -32,8 +32,8 @@ static uint8_t current_direction;
 
 void spindle_init()
 {
-#ifdef SPINDLE_PRESENT
   current_direction = 0;
+#ifdef SPINDLE_PRESENT
   SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT);
   SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT);  
   spindle_stop();

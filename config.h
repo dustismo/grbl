@@ -40,16 +40,20 @@
 #define STEPPERS_DISABLE_DDR    DDRD
 #define STEPPERS_DISABLE_PORT   PORTD
 #define STEPPERS_DISABLE_BIT    4  // Uno Digital Pin 4
-#define STEPPERS_DISABLE_INVERT    // Logic low out for disable (e.g. steppernug)
-#define X2_DISABLE_BIT              3  // Uno Digital Pin 3  Hi disables X2
+#define STEPPERS_DISABLE_INVERT_MASK  0
 
 #define LIMIT_DDR     DDRD
 #define LIMIT_PIN     PIND
+#define HOME_PIN      PIND
 #define LIMIT_PORT    PORTD
 #define X_LIMIT_BIT   7  // Uno Digital Pin 7
 #define Y_LIMIT_BIT   6  // Uno Digital Pin 6
 #define Z_LIMIT_BIT   5  // Uno Digital Pin 5
 #define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
+#define X_HOME_BIT   7  // Uno Digital Pin 7
+#define Y_HOME_BIT   6  // Uno Digital Pin 6
+#define Z_HOME_BIT   5  // Uno Digital Pin 5
+#define X2_HOME_BIT  2  // Uno Digital Pin 2 (INT0)
 #define LIMIT_INT       PCIE0  // Pin change interrupt settings
 #define LIMIT_INT_vect  PCINT0_vect
 #define LIMIT_PCMSK     PCMSK0
@@ -129,7 +133,7 @@
 // Number of homing cycles performed after when the machine initially jogs to limit switches.
 // This help in preventing overshoot and should improve repeatability. This value should be one or 
 // greater.
-#define N_HOMING_CYCLE 2 // Integer (1-128)
+#define N_HOMING_CYCLE 3 // Integer (1-128)
 
 // ---------------------------------------------------------------------------------------
 // FOR ADVANCED USERS ONLY: 

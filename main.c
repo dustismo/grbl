@@ -88,6 +88,7 @@ int main(void)
       MCP23017_begin(MCP23017_ADDR);
       #endif
       limits_init();
+      home_init();
       st_reset(); // Clear stepper subsystem variables.
       
       // Reload last known machine position and work systems. G92 coordinate offsets are reset.

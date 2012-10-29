@@ -204,7 +204,7 @@ void mc_go_home()
   // Upon completion, reset all internal position vectors (g-code parser, planner, system)
   gc_clear_position();
   plan_clear_position();
-  clear_vector_float(sys.position);
+  //clear_vector_float(sys.position); // sys.position is set to zero when switch triggered
   
   // If hard limits enabled, move all axes off limit switches before enabling the hard limit
   // pin change interrupt. This should help prevent the switches from falsely tripping.
