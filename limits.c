@@ -69,12 +69,11 @@ ISR(LIMIT_INT_vect)
 // Moves each axis in a trapezoidal move with axis-specific accel, decel, and slew speed
 // Homing is a special motion case, where there is only an 
 // acceleration followed by decelerated stops by each axes reaching their limit 
-// switch independently. Instead of shoehorning homing cycles into the main stepper 
-// algorithm and overcomplicate things, a stripped-down, lite version of the stepper 
-// algorithm is written here. This also lets users hack and tune this code freely for
-// their own particular needs without affecting the rest of Grbl.
-
-// Unlike the main stepper algorithm, there is no coordinated movement between axes
+// switch independently. 
+//
+// Homing uses an independent-axis algorithm: upon hitting its home switch, one axis can
+// do controlled deceleration while other axes continue to seek. Unlike the main stepper
+// algorithm, there is no coordinated movement between axes.
 // The update rate is constant and an independent 2nd-order phase accumulator handles each axis.
 // We share the position counters from the stepper state variable st defined in stepper.c
 
@@ -84,8 +83,8 @@ ISR(LIMIT_INT_vect)
 
 // these data structures allow independent parameters for each axis
 static struct {
-  float rate[2];
-  float decel;
+  float rate[2]; // fast (seek) and slow (feed) rates mm/min
+  float decel; 
   uint8_t accel_ratio;
 } home_params[3];
 
@@ -109,7 +108,9 @@ inline uint8_t home_limit_state() {
 }
 
 // This function is used inside the Stepper Driver Interrupt when in independent-axis mode
-//   it includes the complete state machine for a trapezoidal move
+//   it includes the complete state machine for a trapezoidal move with separate accel and
+//   decel values. The indep_t structure is defined in stepper.h 
+// This supports move-to-target-position as well as stop-at-home-switch functions.
 bool indep_increment(indep_t_ptr ht)
 {
   if(ht->state==idle || ht->state==done || ht->state==fault)
@@ -255,13 +256,13 @@ void homing_cycle(uint8_t x_axis, uint8_t x2_axis, uint8_t y_axis, uint8_t z_axi
 void limits_go_home() 
 {
   plan_synchronize();  // Empty all motions in buffer.
-  // Z axis homing
+  // Z-axis homing
   homing_cycle(ax_stop, slave_stop, ax_stop, ax_fast, dir_neg); // z axis approach home
   homing_cycle(ax_stop, slave_stop, ax_stop, ax_slow, dir_pos); // z back off
-  // could move to clear position here
+  // X- and Y-axis seek home simultaneously
   homing_cycle(ax_fast, slave_run_watch_both, ax_fast, ax_stop, dir_neg); // x and y axis approach home
   homing_cycle(ax_stop, slave_stop, ax_slow, ax_stop, dir_pos); // y back off 
-  // x axis master/slave homing
+  // X-axis master/slave homing
   // jog back and forth until slave enters home first
   while(!(home_limit_state() & (1<<X_HOME_BIT))) { // master in home, slave not
     homing_cycle(ax_slow, slave_stop, ax_stop, ax_stop, dir_pos); // back out master only 
