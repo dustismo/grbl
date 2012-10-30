@@ -24,7 +24,7 @@
 #define LIMIT_MASK ((1<<X_LIMIT_BIT)|(1<<X2_LIMIT_BIT)|(1<<Y_LIMIT_BIT)|(1<<Z_LIMIT_BIT)) // All limit bits
 #define HOME_MASK ((1<<X_LIMIT_BIT)|(1<<X2_LIMIT_BIT)|(1<<Y_LIMIT_BIT)|(1<<Z_LIMIT_BIT)) // All limit bits
 
-#define HOME_EVENTS_PER_SECOND (20000L)
+#define HOME_EVENTS_PER_SECOND (10000L)
 #define INDEP_EVENT_COUNT (1L<<30)
 // initialize the limits module
 void limits_init();

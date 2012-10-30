@@ -37,8 +37,9 @@
 #include "limits.h"
 #include "settings.h"
 #include "serial.h"
+#ifdef MCP23017_PRESENT
 #include "MCP23017.h"
-
+#endif
 // Declare system global variable structure
 system_t sys; 
 
@@ -85,7 +86,7 @@ int main(void)
       coolant_init();
       #endif
       #ifdef MCP23017_PRESENT
-      MCP23017_begin(MCP23017_ADDR);
+      MCP23017_begin(0);
       #endif
       limits_init();
       home_init();

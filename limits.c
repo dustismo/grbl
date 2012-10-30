@@ -32,6 +32,10 @@
 #include "planner.h"
 #include "protocol.h"
 #include "limits.h"
+//#ifdef MCP23017_HOME_LIMIT_POLL
+#include "MCP23017.h"
+#include "twi.h"
+//#endif
 
 #include "print.h"
 #include <avr/pgmspace.h>
@@ -108,10 +112,17 @@ home_params[Z_AXIS].accel_ratio = 50;
 home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.25; // mm/min^2; 0.25 sec to stop
 }
 
+#ifdef MCP23017_HOME_LIMIT_POLL
+static uint8_t mcp23017_pins[2];
 inline uint8_t home_limit_state() {
- return HOME_PIN;
+  twi_nonBlockingReadFrom(i2caddr, mcp23017_pins, 2);
+  return (volatile uint8_t)mcp23017_pins[0];
 }
-
+#else
+inline uint8_t home_limit_state() {
+  return HOME_PIN;
+}
+#endif
 // This function is used inside the Stepper Driver Interrupt when in independent-axis mode
 //   it includes the complete state machine for a trapezoidal move with separate accel and
 //   decel values. The indep_t structure is defined in stepper.h 
@@ -159,6 +170,9 @@ bool indep_increment(indep_t_ptr ht)
 
 // Start the stepper driver in independent mode, and wait for it to complete
 static void run_independent_move(indep_t_ptr frame) { 
+  #ifdef MCP23017_HOME_LIMIT_POLL
+  twi_readFrom(i2caddr, mcp23017_pins, 2);
+  #endif
   for(;;) {
     if(!indep_mode) {
       st_indep_start(frame);
@@ -181,7 +195,7 @@ static void run_independent_move(indep_t_ptr frame) {
 }
 
 // some mnemonics for homing_cycle function arguments
-const uint8_t ax_stop=0, ax_fast=1, ax_slow=2; // axis movment speed
+const uint8_t ax_stop=0, ax_fast=1, ax_slow=2; // axis movement speed
 const uint8_t slave_stop=0, slave_run=1, slave_run_watch_both=2; // x2 axis
 const uint8_t dir_pos=1, dir_neg=0;
 void homing_cycle(uint8_t x_axis, uint8_t x2_axis, uint8_t y_axis, uint8_t z_axis, uint8_t pos_dir) 
@@ -264,6 +278,7 @@ void limits_go_home()
   // Z-axis homing
   homing_cycle(ax_stop, slave_stop, ax_stop, ax_fast, dir_neg); // z axis approach home
   homing_cycle(ax_stop, slave_stop, ax_stop, ax_slow, dir_pos); // z back off
+
   // X- and Y-axis seek home simultaneously
   homing_cycle(ax_fast, slave_run_watch_both, ax_fast, ax_stop, dir_neg); // x and y axis approach home
   homing_cycle(ax_stop, slave_stop, ax_slow, ax_stop, dir_pos); // y back off 
@@ -282,7 +297,8 @@ void limits_go_home()
     // using master motor only, find master home switch departure
     homing_cycle(ax_slow, slave_stop, ax_stop, ax_stop, dir_neg);
     homing_cycle(ax_slow, slave_stop, ax_stop, ax_stop, dir_pos);
-  }   
+  }
+
 #if 0
   // sample code to test independent point-to-point positioning
   //  bug warning: this isn't reliable when all 3 axes are commanded

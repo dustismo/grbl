@@ -14,7 +14,7 @@
 #include "twi.h"
 #include <avr/pgmspace.h>
 #include "MCP23017.h"
-
+#include "config.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -22,13 +22,24 @@
 void MCP23017_begin(uint8_t addr) {
   i2caddr = MCP23017_ADDRESS | (addr&7);
   twi_init();
-
-  // set defaults!
+  // set defaults
   // all pins input direction
-  //uint8_t localbuf[] = {MCP23017_IODIRA, 0xFF, 0xFF};
-  // all pins out direction
-  uint8_t localbuf[] = {MCP23017_IODIRA, 0x00, 0x00};
+  static uint8_t localbuf[3];
+  localbuf[0]=MCP23017_IODIRA; localbuf[1]=0xFF; localbuf[2]=0xFF;
+  // out direction
+  //uint8_t localbuf[] = {MCP23017_IODIRA, 0x00, 0x00};
   twi_writeTo(i2caddr, localbuf, 3, DO_WAIT);
+  #ifdef MCP23017_HOME_LIMIT_POLL
+  // set up IOCON.SEQOP=1, BANK=0 to read repeatedly from both input latches
+  localbuf[0]=MCP23017_IOCONA; localbuf[1]=0x20; 
+  twi_writeTo(i2caddr, localbuf, 2, DO_WAIT);
+  // set address pointer to GPIO
+  localbuf[0]=MCP23017_GPIOA;
+  twi_writeTo(i2caddr, localbuf, 1, DO_WAIT);
+  // read?
+  twi_nonBlockingReadFrom(i2caddr, localbuf, 2);
+
+  #endif
 }
 
 

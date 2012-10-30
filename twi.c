@@ -45,6 +45,7 @@ static void (*twi_onSlaveReceive)(uint8_t*, int);
 static uint8_t twi_masterBuffer[TWI_BUFFER_LENGTH];
 static volatile uint8_t twi_masterBufferIndex;
 static uint8_t twi_masterBufferLength;
+static uint8_t* twi_masterBufferPtr;
 
 static uint8_t twi_txBuffer[TWI_BUFFER_LENGTH];
 static volatile uint8_t twi_txBufferIndex;
@@ -104,6 +105,7 @@ void twi_setAddress(uint8_t address)
   TWAR = address << 1;
 }
 
+
 /* 
  * Function twi_readFrom
  * Desc     attempts to become twi bus master and read a
@@ -121,11 +123,34 @@ uint8_t twi_readFrom(uint8_t address, uint8_t* data, uint8_t length)
   if(TWI_BUFFER_LENGTH < length){
     return 0;
   }
-
-  // wait until twi is ready, become master receiver
-  while(TWI_READY != twi_state){
+  // wait until twi is ready, then initiate read
+  while(twi_nonBlockingReadFrom(address, twi_masterBuffer, length)) {
     continue;
   }
+  // wait for read operation to complete
+  while(TWI_MRX == twi_state){
+    continue;
+  }
+
+  if (twi_masterBufferIndex < length)
+    length = twi_masterBufferIndex;
+
+  // copy twi buffer to data
+  for(i = 0; i < length; ++i){
+    data[i] = twi_masterBuffer[i];
+  }
+	
+  return length;
+}
+// for non-blocking read, the interrupt service fills user buffer in background
+// returns immediately with status -1 = busy, or 0 = read operation initiated. 
+int8_t twi_nonBlockingReadFrom(uint8_t address, uint8_t* data, uint8_t length)
+{
+  // if twi is ready, become master receiver
+  if(TWI_READY != twi_state){
+    return -1; // busy
+  }
+  twi_masterBufferPtr=data;
   twi_state = TWI_MRX;
   // reset error state (0xFF.. no error occured)
   twi_error = 0xFF;
@@ -146,20 +171,7 @@ uint8_t twi_readFrom(uint8_t address, uint8_t* data, uint8_t length)
   // send start condition
   TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
 
-  // wait for read operation to complete
-  while(TWI_MRX == twi_state){
-    continue;
-  }
-
-  if (twi_masterBufferIndex < length)
-    length = twi_masterBufferIndex;
-
-  // copy twi buffer to data
-  for(i = 0; i < length; ++i){
-    data[i] = twi_masterBuffer[i];
-  }
-	
-  return length;
+  return 0;
 }
 
 /* 
@@ -194,6 +206,7 @@ uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait
   twi_error = 0xFF;
 
   // initialize buffer iteration vars
+  twi_masterBufferPtr = twi_masterBuffer;
   twi_masterBufferIndex = 0;
   twi_masterBufferLength = length;
   
@@ -348,7 +361,7 @@ SIGNAL(TWI_vect)
       // if there is data to send, send it, otherwise stop 
       if(twi_masterBufferIndex < twi_masterBufferLength){
         // copy data to output register and ack
-        TWDR = twi_masterBuffer[twi_masterBufferIndex++];
+        TWDR = *(twi_masterBufferPtr+twi_masterBufferIndex++);
         twi_reply(1);
       }else{
         twi_stop();
@@ -370,7 +383,7 @@ SIGNAL(TWI_vect)
     // Master Receiver
     case TW_MR_DATA_ACK: // data received, ack sent
       // put byte into buffer
-      twi_masterBuffer[twi_masterBufferIndex++] = TWDR;
+      *(twi_masterBufferPtr+twi_masterBufferIndex++) = TWDR;
     case TW_MR_SLA_ACK:  // address sent, ack received
       // ack if more bytes are expected, otherwise nack
       if(twi_masterBufferIndex < twi_masterBufferLength){
@@ -381,7 +394,7 @@ SIGNAL(TWI_vect)
       break;
     case TW_MR_DATA_NACK: // data received, nack sent
       // put final byte into buffer
-      twi_masterBuffer[twi_masterBufferIndex++] = TWDR;
+      *(twi_masterBufferPtr+twi_masterBufferIndex++) = TWDR;
     case TW_MR_SLA_NACK: // address sent, nack received
       twi_stop();
       break;

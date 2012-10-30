@@ -205,8 +205,6 @@ void mc_go_home()
 
   // Upon completion, reset all internal position vectors (g-code parser, planner, system)
   //   sys.position is set to zero when switch triggered
-  //gc_clear_position();
-  //plan_clear_position();
   //clear_vector_float(sys.position);
   gc_set_current_position(sys.position[X_AXIS],sys.position[Y_AXIS],sys.position[Z_AXIS]);
   plan_set_current_position(sys.position[X_AXIS],sys.position[Y_AXIS],sys.position[Z_AXIS]);

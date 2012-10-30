@@ -26,6 +26,7 @@
 // I2C I/O Expander
 #define MCP23017_PRESENT
 #define MCP23017_ADDR   0x20  // 7-bit address, lsbits are A2..A0
+#define MCP23017_HOME_LIMIT_POLL
 
 // Define pin-assignments
 #undef STEPPING_DDR
