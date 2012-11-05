@@ -199,8 +199,9 @@ void mc_dwell(float seconds)
 void mc_go_home()
 {
   plan_synchronize();  // Empty all motions in buffer before homing.
+  #ifdef LIMIT_INT
   PCICR &= ~(1 << LIMIT_INT);   // Disable hard limits pin change interrupt
-
+  #endif
   limits_go_home(); // Perform homing routine.
 
   // Upon completion, reset all internal position vectors (g-code parser, planner, system)
@@ -223,7 +224,9 @@ void mc_go_home()
     st_cycle_start(); // Move it. Nothing should be in the buffer except this motion. 
     plan_synchronize(); // Make sure the motion completes.
     gc_set_current_position(sys.position[X_AXIS],sys.position[Y_AXIS],sys.position[Z_AXIS]);
+    #ifdef LIMIT_INT
     PCICR |= (1 << LIMIT_INT);  // Re-enable hard limits.
+    #endif
   }
 }
 

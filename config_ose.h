@@ -64,6 +64,8 @@
 #undef Y_LIMIT_BIT
 #undef Z_LIMIT_BIT
 
+#define USE_I2C_LIMITS
+
 #ifdef USE_I2C_LIMITS
 #undef LIMIT_INT
 

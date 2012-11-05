@@ -76,8 +76,10 @@ ISR(LIMIT_INT_vect)
     //   a minor annoyance.
   }
 }
-
+#else
+void limits_init() { } // not necessary with ose I2C limits
 #endif
+
 // Moves each axis in a trapezoidal move with axis-specific accel, decel, and slew speed
 // Homing is a special motion case, where there is only an 
 // acceleration followed by decelerated stops by each axes reaching their limit 
