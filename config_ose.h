@@ -26,7 +26,6 @@
 // I2C I/O Expander
 #define MCP23017_PRESENT
 #define MCP23017_ADDR   0x20  // 7-bit address, lsbits are A2..A0
-#define MCP23017_HOME_LIMIT_POLL
 
 // Define pin-assignments
 #undef STEPPING_DDR
@@ -64,6 +63,21 @@
 #undef X_LIMIT_BIT
 #undef Y_LIMIT_BIT
 #undef Z_LIMIT_BIT
+
+#ifdef USE_I2C_LIMITS
+#undef LIMIT_INT
+
+#define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
+#define X_LIMIT_BIT   7  // Uno Digital Pin 7
+#define Y_LIMIT_BIT   6  // Uno Digital Pin 6
+#define Z_LIMIT_BIT   5  // Uno Digital Pin 5
+#define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
+#define X_HOME_BIT   7  // Uno Digital Pin 7
+#define Y_HOME_BIT   6  // Uno Digital Pin 6
+#define Z_HOME_BIT   5  // Uno Digital Pin 5
+#define X2_HOME_BIT  2  // Uno Digital Pin 2 (INT0)
+
+#else
 #define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
 #define LIMIT_DDR     DDRD
 #define LIMIT_PIN     PIND
@@ -78,7 +92,8 @@
 #define Z_HOME_BIT   5  // Uno Digital Pin 5
 #define X2_HOME_BIT  2  // Uno Digital Pin 2 (INT0)
 
-
+#endif
+#define LIMITS_INVERT_MASK 0
 
 #undef SPINDLE_PRESENT
 #undef COOLANT_PRESENT

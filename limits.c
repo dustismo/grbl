@@ -42,6 +42,7 @@
 
 #define MICROSECONDS_PER_ACCELERATION_TICK  (1000000/ACCELERATION_TICKS_PER_SECOND)
 
+#ifndef USE_I2C_LIMITS
 void limits_init() 
 {
   LIMIT_DDR &= ~(LIMIT_MASK); // Set as input pins
@@ -52,6 +53,7 @@ void limits_init()
     PCICR |= (1 << LIMIT_INT);   // Enable Pin Change Interrupt
   }
 }
+
 
 // This is the Limit Pin Change Interrupt, which handles the hard limit feature.
 // NOTE: Do not attach an e-stop to the limit pins, because this interrupt is disabled during
@@ -75,6 +77,7 @@ ISR(LIMIT_INT_vect)
   }
 }
 
+#endif
 // Moves each axis in a trapezoidal move with axis-specific accel, decel, and slew speed
 // Homing is a special motion case, where there is only an 
 // acceleration followed by decelerated stops by each axes reaching their limit 
@@ -112,7 +115,7 @@ home_params[Z_AXIS].accel_ratio = 50;
 home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.25; // mm/min^2; 0.25 sec to stop
 }
 
-#ifdef MCP23017_HOME_LIMIT_POLL
+#ifdef USE_I2C_LIMITS
 static uint8_t mcp23017_pins[2];
 inline uint8_t home_limit_state() {
   twi_nonBlockingReadFrom(i2caddr, mcp23017_pins, 2);
@@ -170,7 +173,7 @@ bool indep_increment(indep_t_ptr ht)
 
 // Start the stepper driver in independent mode, and wait for it to complete
 static void run_independent_move(indep_t_ptr frame) { 
-  #ifdef MCP23017_HOME_LIMIT_POLL
+  #ifdef USE_I2C_LIMITS
   twi_readFrom(i2caddr, mcp23017_pins, 2);
   #endif
   for(;;) {

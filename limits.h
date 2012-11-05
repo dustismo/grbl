@@ -26,12 +26,18 @@
 
 #define HOME_EVENTS_PER_SECOND (10000L)
 #define INDEP_EVENT_COUNT (1L<<30)
+
+extern uint8_t potential_hardlimit;
+
 // initialize the limits module
 void limits_init();
 void home_init();
 
 // perform the homing cycle
 void limits_go_home();
+
+// read home & limit switch status
+uint8_t home_limit_state();
 
 // This function is used inside the Stepper Driver Interrupt when homing
 bool indep_increment(indep_t_ptr ht);

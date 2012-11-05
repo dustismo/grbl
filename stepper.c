@@ -32,6 +32,8 @@
 #include "nuts_bolts.h"
 #include <avr/interrupt.h>
 #include "planner.h"
+#include "motion_control.h"
+#include "protocol.h"
 #include "limits.h"
 
 // Some useful constants
@@ -92,6 +94,8 @@ static volatile uint8_t busy;   // True when SIG_OUTPUT_COMPARE1A is being servi
 
 static void set_step_events_per_minute(uint32_t steps_per_minute);
 
+static void set_motion_state_indep(indep_t_ptr it); // forward declaration
+
 // Stepper state initialization 
 static void st_wake_up() 
 {
@@ -122,7 +126,7 @@ void st_indep_start(indep_t_ptr frame)
     st.counter_x = -(INDEP_EVENT_COUNT >> 1);
     st.counter_y = st.counter_x;
     st.counter_z = st.counter_x;
-    st.event_count = INDEP_EVENT_COUNT;
+    set_motion_state_indep(frame); // for hard limits
     st_wake_up();
   }
 }
@@ -134,21 +138,101 @@ static void inline enable_steppers() {
   STEPPERS_DISABLE_PORT = (STEPPERS_DISABLE_PORT & ~STEPPERS_DISABLE_MASK)
                           | (STEPPERS_DISABLE_INVERT_MASK & STEPPERS_DISABLE_MASK); }
 
+                          // 'axes_moving' & 'axes_dir' bitfields describe the current motion state, needed for hard limits
+uint8_t axes_moving, axes_dir;
+// update motion state, called at beginning of new block
+static void set_motion_state_block(block_t* block)
+{
+  axes_moving = 0;
+  axes_dir = 0;
+  uint8_t dir = block->direction_bits;
+  if(block->steps_x != 0) {
+    axes_moving |= X_HOME_BIT;
+    if(dir & X_DIRECTION_BIT) {
+      axes_dir |= X_HOME_BIT;
+    }
+  }
+   if(block->steps_y != 0) {
+    axes_moving |= Y_HOME_BIT;
+    if(dir & Y_DIRECTION_BIT) {
+      axes_dir |= Y_HOME_BIT;
+    }
+  }
+   if(block->steps_z != 0) {
+    axes_moving |= Z_HOME_BIT;
+    if(dir & Z_DIRECTION_BIT) {
+      axes_dir |= Z_HOME_BIT;
+    }
+  }
+}
+
+// update motion state, called at beginning of new independent-mode movement
+static void set_motion_state_indep(indep_t_ptr it)
+{
+  axes_moving = 0;
+  axes_dir = 0;
+  uint8_t ob0 = out_bits0^settings.invert_mask;
+  while(it) {
+    switch(it->axis) {
+      case X_AXIS:
+        if(ob0 & (1<<X_DIRECTION_BIT)) {
+          axes_dir |= it->home_mask;
+        }
+        break;
+      case Y_AXIS:
+        if(ob0 & (1<<Y_DIRECTION_BIT)) {
+          axes_dir |= it->home_mask;
+        }
+        break;
+      case Z_AXIS:
+        if(ob0 & (1<<Z_DIRECTION_BIT)) {
+          axes_dir |= it->home_mask;
+        }
+        break;
+    }
+    if((it->flags & INDEP_HOMING) 
+       && (it->home_mask & (home_limit_state()^it->home_nullstate)) ) {
+      it->state = done;
+    } else {
+      axes_moving |= it->home_mask;
+    }
+    it = it->next_axis;
+  }
+}
+
+
 // Stepper shutdown
 void st_go_idle() 
 {
   // Disable stepper driver interrupt
-  TIMSK1 &= ~(1<<OCIE1A); 
+  TIMSK1 &= ~(1<<OCIE1A);
+  axes_moving = 0;
+  if(bit_istrue(sys.execute,EXEC_ALARM)) {
+    disable_steppers();
+  }
   if(indep_mode) return;
   // Force stepper dwell to lock axes for a defined amount of time to ensure the axes come to a complete
   // stop and not drift from residual inertial forces at the end of the last movement.
   delay_ms(settings.stepper_idle_lock_time);
   // Disable steppers only upon system alarm activated or by user setting to not be kept enabled.
-  if ((settings.stepper_idle_lock_time != 0xff) || bit_istrue(sys.execute,EXEC_ALARM)) {
-  disable_steppers();
+  if ((settings.stepper_idle_lock_time != 0xff)) {
+    disable_steppers();
   }
 }
 
+// Hard limit test is called inside the stepper interrupt
+//  This version is for a configuration with mid-span home switch, end-of-travel limit switch
+static inline void test_hard_limits()
+{
+  if ( settings.flags & (1<<BITFLAG_HARD_LIMIT_ENABLE) ) { 
+    uint8_t home_lim = home_limit_state()^LIMITS_INVERT_MASK;
+    if( ((home_lim^axes_dir) & axes_moving) // we are moving towards a limit switch
+        && (home_lim & LIMIT_MASK) ) { // we hit one
+      mc_alarm(); // Initiate system kill.
+      protocol_status_message(STATUS_HARD_LIMIT); // Print ok in interrupt since system killed.
+    }
+  }
+}
 // This function determines an acceleration velocity change every CYCLES_PER_ACCELERATION_TICK by
 // keeping track of the number of elapsed cycles during a de/ac-celeration. The code assumes that 
 // step_events occur significantly more often than the acceleration velocity iterations.
@@ -210,6 +294,7 @@ ISR(TIMER1_COMPA_vect)
       st.step_events_completed = 0;  
       out_bits0 = (out_bits0 & ~DIRECTION_MASK)
                   | ((current_block->direction_bits ^ settings.invert_mask) & DIRECTION_MASK);
+      set_motion_state_block(current_block); // for hard limits
     } else {
       st_go_idle();
       sys.cycle_start = false;
@@ -233,6 +318,7 @@ ISR(TIMER1_COMPA_vect)
   if (current_block != NULL || indep_mode) {
     // Execute step displacement profile by bresenham line algorithm
     // note: unnecessary to set direction here; it is set at new block & retained in out_bits0
+
     if (st.counter_x > 0) {
       out_bits ^= (1<<X_STEP_BIT);
       st.counter_x -= st.event_count;
@@ -251,6 +337,11 @@ ISR(TIMER1_COMPA_vect)
       if ((out_bits^settings.invert_mask) & (1<<Z_DIRECTION_BIT)) { sys.position[Z_AXIS]--; }
       else { sys.position[Z_AXIS]++; }
     }
+    // check home & limit switches for hard limit situation 
+    if(out_bits != out_bits0) { // if we are taking a motor step
+      test_hard_limits();
+    }
+                   
     if(!indep_mode) {      
       st.step_events_completed++; // Iterate step events
 
@@ -379,6 +470,7 @@ void st_reset()
   current_block = NULL;
   busy = false;
   indep_mode=false;
+  axes_moving = 0;
   disable_steppers();
 }
 

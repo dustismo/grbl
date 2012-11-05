@@ -147,15 +147,21 @@ uint8_t twi_readFrom(uint8_t address, uint8_t* data, uint8_t length)
 int8_t twi_nonBlockingReadFrom(uint8_t address, uint8_t* data, uint8_t length)
 {
   // if twi is ready, become master receiver
+  // use interrupt guard around twi_state test-and-set
+  uint8_t sreg_save = SREG; 
+  cli(); 
   if(TWI_READY != twi_state){
+    SREG = sreg_save; 
     return -1; // busy
   }
-  twi_masterBufferPtr=data;
   twi_state = TWI_MRX;
+  SREG = sreg_save; 
+  
   // reset error state (0xFF.. no error occured)
   twi_error = 0xFF;
 
   // initialize buffer iteration vars
+  twi_masterBufferPtr=data;
   twi_masterBufferIndex = 0;
   twi_masterBufferLength = length-1;  // This is not intuitive, read on...
   // On receive, the previously configured ACK/NACK setting is transmitted in
@@ -198,10 +204,21 @@ uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait
   }
 
   // wait until twi is ready, become master transmitter
-  while(TWI_READY != twi_state){
-    continue;
+  // use interrupt guard around twi_state test-and-set
+  while(1) {
+    if(TWI_READY != twi_state) {
+      continue;
+    }
+    uint8_t sreg_save = SREG; 
+    cli(); 
+    if(TWI_READY == twi_state) {
+      SREG = sreg_save; 
+      break;
+    }
+    SREG = sreg_save; 
   }
   twi_state = TWI_MTX;
+  
   // reset error state (0xFF.. no error occured)
   twi_error = 0xFF;
 
