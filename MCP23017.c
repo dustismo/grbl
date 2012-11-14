@@ -29,7 +29,7 @@ void MCP23017_begin(uint8_t addr) {
   // out direction
   //uint8_t localbuf[] = {MCP23017_IODIRA, 0x00, 0x00};
   twi_writeTo(i2caddr, localbuf, 3, DO_WAIT);
-  #ifdef MCP23017_HOME_LIMIT_POLL
+  #ifdef USE_I2C_LIMITS
   // set up IOCON.SEQOP=1, BANK=0 to read repeatedly from both input latches
   localbuf[0]=MCP23017_IOCONA; localbuf[1]=0x20; 
   twi_writeTo(i2caddr, localbuf, 2, DO_WAIT);
