@@ -46,6 +46,9 @@
 #define X_DIRECTION_BIT    4  // Uno Digital Pin 12
 #define Y_DIRECTION_BIT    2  // Uno Digital Pin 10
 #define Z_DIRECTION_BIT    0  // Uno Digital Pin 8
+#define STEP_MASK ((1<<X_STEP_BIT)|(1<<Y_STEP_BIT)|(1<<Z_STEP_BIT)) // All step bits
+#define DIRECTION_MASK ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT)|(1<<Z_DIRECTION_BIT)) // All direction bits
+#define STEPPING_MASK (STEP_MASK | DIRECTION_MASK) // All stepping-related bits (step/direction)
 
 #undef STEPPERS_DISABLE_DDR
 #undef STEPPERS_DISABLE_PORT

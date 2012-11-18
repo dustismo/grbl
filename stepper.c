@@ -114,7 +114,7 @@ static void inline enable_steppers() {
 void st_wake_up() 
 {
   enable_steppers();
-  if (sys.state == STATE_CYCLE) {
+  if (sys.state == STATE_CYCLE || sys.state == STATE_HOMING) {
     // Initialize stepper output bits
     out_bits = out_bits0; 
     // Initialize step pulse timing from settings. Here to ensure updating after re-writing.

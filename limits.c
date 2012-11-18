@@ -131,7 +131,7 @@ home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.25; // mm/min^2; 0
 #ifdef USE_I2C_LIMITS
 static uint8_t mcp23017_pins[2];
 inline uint8_t home_limit_state() {
-  //twi_nonBlockingReadFrom(i2caddr, mcp23017_pins, 2);
+  twi_nonBlockingReadFrom(i2caddr, mcp23017_pins, 2);
   return (volatile uint8_t)mcp23017_pins[0];
 }
 #else
@@ -236,6 +236,8 @@ void homing_cycle(uint8_t x_axis, uint8_t x2_axis, uint8_t y_axis, uint8_t z_axi
   uint8_t disable_bits_to_set;
   if(x2_axis) { disable_bits_to_set = STEPPERS_DISABLE_INVERT_MASK & STEPPERS_DISABLE_MASK; }
   else { disable_bits_to_set = (STEPPERS_DISABLE_INVERT_MASK^(1<<X2_DISABLE_BIT)) & STEPPERS_DISABLE_MASK; }
+  print_uint8_base2(disable_bits_to_set);
+  printPgmString(PSTR(" \r\n"));
   STEPPERS_DISABLE_PORT = (STEPPERS_DISABLE_PORT & ~STEPPERS_DISABLE_MASK) | disable_bits_to_set;
 
   // Create the n frames defining n independent movements (n = number of axes moving)

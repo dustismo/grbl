@@ -214,7 +214,9 @@ void mc_go_home()
   plan_synchronize();  // Empty all motions in buffer before homing.
   #ifdef LIMIT_INT
   PCICR &= ~(1 << LIMIT_INT);   // Disable hard limits pin change interrupt
+  LIMIT_PCMSK &= ~LIMIT_MASK; // Disable hard limits pin change register for cycle duration
   #endif
+  sys.state = STATE_HOMING; // Set system state variable
   limits_go_home(); // Perform homing routine.
   if (sys.abort) { return; } // Did not complete. Alarm state set by mc_alarm.
 
