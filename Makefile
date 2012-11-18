@@ -1,6 +1,7 @@
 #  Part of Grbl
 #
 #  Copyright (c) 2009-2011 Simen Svale Skogsrud
+#  Copyright (c) 2012 Sungeun K. Jeon
 #
 #  Grbl is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -39,14 +40,15 @@ OBJECTS    = main.o motion_control.o gcode.o spindle_control.o coolant_control.o
 
 # Tune the lines below only if you know what you are doing:
 
-AVRDUDE = avrdude $(PROGRAMMER) -p $(DEVICE) -B 10 -F 
-COMPILE = avr-gcc -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) -I. -ffunction-sections 
+AVRDUDE = avrdude $(PROGRAMMER) -p $(DEVICE) -B 10 -F
+COMPILE = avr-gcc -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) -I. -ffunction-sections
 
 # symbolic targets:
 all:	grbl.hex
 
 .c.o:
-	$(COMPILE) -c $< -o $@ 
+	$(COMPILE) -c $< -o $@
+	@$(COMPILE) -MM  $< > $*.d
 
 .S.o:
 	$(COMPILE) -x assembler-with-cpp -c $< -o $@
@@ -72,7 +74,7 @@ load: all
 	bootloadHID grbl.hex
 
 clean:
-	rm -f grbl.hex main.elf $(OBJECTS)
+	rm -f grbl.hex main.elf $(OBJECTS) $(OBJECTS:.o=.d)
 
 # file targets:
 main.elf: $(OBJECTS)
@@ -91,3 +93,7 @@ disasm:	main.elf
 
 cpp:
 	$(COMPILE) -E main.c
+
+# include generated header dependencies
+-include $(OBJECTS:.o=.d)
+

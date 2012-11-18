@@ -23,15 +23,10 @@
    used to be a part of the Arduino project. */ 
 
 #include <avr/interrupt.h>
-#include <avr/sleep.h>
 #include "serial.h"
 #include "config.h"
 #include "motion_control.h"
-#include "nuts_bolts.h"
 #include "protocol.h"
-
-#define RX_BUFFER_SIZE 128
-#define TX_BUFFER_SIZE 64
 
 uint8_t rx_buffer[RX_BUFFER_SIZE];
 uint8_t rx_buffer_head = 0;
@@ -42,14 +37,6 @@ uint8_t tx_buffer_head = 0;
 volatile uint8_t tx_buffer_tail = 0;
 
 #ifdef ENABLE_XONXOFF
-  #define RX_BUFFER_FULL 96 // XOFF high watermark
-  #define RX_BUFFER_LOW 64 // XON low watermark
-  #define SEND_XOFF 1
-  #define SEND_XON 2
-  #define XOFF_SENT 3
-  #define XON_SENT 4
-  #define XOFF_CHAR 0x13
-  #define XON_CHAR 0x11
   volatile uint8_t flow_ctrl = XON_SENT; // Flow control state variable
   
   // Returns the number of bytes in the RX buffer. This replaces a typical byte counter to prevent
@@ -62,19 +49,19 @@ volatile uint8_t tx_buffer_tail = 0;
   }
 #endif
 
-static void set_baud_rate(long baud) {
-  uint16_t UBRR0_value = ((F_CPU / 16 + baud / 2) / baud - 1);
+void serial_init()
+{
+  // Set baud rate
+  #if BAUD_RATE < 57600
+    uint16_t UBRR0_value = ((F_CPU / (8L * BAUD_RATE)) - 1)/2 ;
+    UCSR0A &= ~(1 << U2X0); // baud doubler off  - Only needed on Uno XXX
+  #else
+    uint16_t UBRR0_value = ((F_CPU / (4L * BAUD_RATE)) - 1)/2;
+    UCSR0A |= (1 << U2X0);  // baud doubler on for high baud rates, i.e. 115200
+  #endif
   UBRR0H = UBRR0_value >> 8;
   UBRR0L = UBRR0_value;
-}
-
-void serial_init(long baud)
-{
-  set_baud_rate(baud);
-  
-  /* baud doubler off  - Only needed on Uno XXX */
-  UCSR0A &= ~(1 << U2X0);
-          
+            
   // enable rx and tx
   UCSR0B |= 1<<RXEN0;
   UCSR0B |= 1<<TXEN0;
@@ -104,7 +91,11 @@ void serial_write(uint8_t data) {
 }
 
 // Data Register Empty Interrupt handler
+#ifdef __AVR_ATmega644P__
+ISR(USART0_UDRE_vect)
+#else
 ISR(USART_UDRE_vect)
+#endif
 {
   // Temporary tx_buffer_tail (to optimize for volatile)
   uint8_t tail = tx_buffer_tail;
@@ -153,7 +144,11 @@ uint8_t serial_read()
   }
 }
 
+#ifdef __AVR_ATmega644P__
+ISR(USART0_RX_vect)
+#else
 ISR(USART_RX_vect)
+#endif
 {
   uint8_t data = UDR0;
   uint8_t next_head;
@@ -164,11 +159,7 @@ ISR(USART_RX_vect)
     case CMD_STATUS_REPORT: sys.execute |= EXEC_STATUS_REPORT; break; // Set as true
     case CMD_CYCLE_START:   sys.execute |= EXEC_CYCLE_START; break; // Set as true
     case CMD_FEED_HOLD:     sys.execute |= EXEC_FEED_HOLD; break; // Set as true
-    case CMD_RESET:
-      // Immediately force stepper and spindle subsystem idle at an interrupt level.
-      if (!(sys.execute & EXEC_RESET)) { mc_alarm(); } // Stop only first time.
-      sys.execute |= EXEC_RESET; // Set as true
-      break;
+    case CMD_RESET:         mc_reset(); break; // Call motion control reset routine.
     default: // Write character to buffer    
       next_head = rx_buffer_head + 1;
       if (next_head == RX_BUFFER_SIZE) { next_head = 0; }

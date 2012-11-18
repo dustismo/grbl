@@ -21,15 +21,15 @@
 */
 
 #include <avr/io.h>
+#include <util/delay.h>
+#include <math.h>
+#include <stdlib.h>
 #include "settings.h"
 #include "config.h"
 #include "gcode.h"
 #include "motion_control.h"
 #include "spindle_control.h"
 #include "coolant_control.h"
-#include <util/delay.h>
-#include <math.h>
-#include <stdlib.h>
 #include "nuts_bolts.h"
 #include "stepper.h"
 #include "planner.h"
@@ -61,18 +61,26 @@ void mc_line(float x, float y, float z, float feed_rate, uint8_t invert_feed_rat
   do {
     protocol_execute_runtime(); // Check for any run-time commands
     if (sys.abort) { return; } // Bail, if system abort.
-  } while ( plan_check_full_buffer() );  
-  plan_buffer_line(x, y, z, feed_rate, invert_feed_rate);
-  
-  // Auto-cycle start immediately after planner finishes. Enabled/disabled by grbl settings. During 
-  // a feed hold, auto-start is disabled momentarily until the cycle is resumed by the cycle-start 
-  // runtime command.
-  // NOTE: This is allows the user to decide to exclusively use the cycle start runtime command to
-  // begin motion or let grbl auto-start it for them. This is useful when: manually cycle-starting
-  // when the buffer is completely full and primed; auto-starting, if there was only one g-code 
-  // command sent during manual operation; or if a system is prone to buffer starvation, auto-start
-  // helps make sure it minimizes any dwelling/motion hiccups and keeps the cycle going. 
-  if (sys.auto_start) { st_cycle_start(); }
+  } while ( plan_check_full_buffer() );
+
+  // If in check gcode mode, prevent motion by blocking planner.
+  if (sys.state != STATE_CHECK_MODE) {
+    plan_buffer_line(x, y, z, feed_rate, invert_feed_rate);
+    
+    // If idle, indicate to the system there is now a planned block in the buffer ready to cycle 
+    // start. Otherwise ignore and continue on.
+    if (!sys.state) { sys.state = STATE_QUEUED; }
+    
+    // Auto-cycle start immediately after planner finishes. Enabled/disabled by grbl settings. During 
+    // a feed hold, auto-start is disabled momentarily until the cycle is resumed by the cycle-start 
+    // runtime command.
+    // NOTE: This is allows the user to decide to exclusively use the cycle start runtime command to
+    // begin motion or let grbl auto-start it for them. This is useful when: manually cycle-starting
+    // when the buffer is completely full and primed; auto-starting, if there was only one g-code 
+    // command sent during manual operation; or if a system is prone to buffer starvation, auto-start
+    // helps make sure it minimizes any dwelling/motion hiccups and keeps the cycle going. 
+    if (sys.auto_start) { st_cycle_start(); }
+  }
 }
 
 
@@ -95,8 +103,11 @@ void mc_arc(float *position, float *target, float *offset, uint8_t axis_0, uint8
   
   // CCW angle between position and target from circle center. Only one atan2() trig computation required.
   float angular_travel = atan2(r_axis0*rt_axis1-r_axis1*rt_axis0, r_axis0*rt_axis0+r_axis1*rt_axis1);
-  if (angular_travel < 0) { angular_travel += 2*M_PI; }
-  if (isclockwise) { angular_travel -= 2*M_PI; }
+  if (isclockwise) { // Correct atan2 output per direction
+    if (angular_travel >= 0) { angular_travel -= 2*M_PI; }
+  } else {
+    if (angular_travel <= 0) { angular_travel += 2*M_PI; }
+  }
   
   float millimeters_of_travel = hypot(angular_travel*radius, fabs(linear_travel));
   if (millimeters_of_travel == 0.0) { return; }
@@ -110,7 +121,7 @@ void mc_arc(float *position, float *target, float *offset, uint8_t axis_0, uint8
   float linear_per_segment = linear_travel/segments;
   
   /* Vector rotation by transformation matrix: r is the original vector, r_T is the rotated vector,
-     and phi is the angle of rotation. Based on the solution approach by Jens Geisler.
+     and phi is the angle of rotation. Solution approach by Jens Geisler.
          r_T = [cos(phi) -sin(phi);
                 sin(phi)  cos(phi] * r ;
      
@@ -150,14 +161,14 @@ void mc_arc(float *position, float *target, float *offset, uint8_t axis_0, uint8
 
   for (i = 1; i<segments; i++) { // Increment (segments-1)
     
-    if (count < N_ARC_CORRECTION) {
+    if (count < settings.n_arc_correction) {
       // Apply vector rotation matrix 
       r_axisi = r_axis0*sin_T + r_axis1*cos_T;
       r_axis0 = r_axis0*cos_T - r_axis1*sin_T;
       r_axis1 = r_axisi;
       count++;
     } else {
-      // Arc correction to radius vector. Computed only every N_ARC_CORRECTION increments.
+      // Arc correction to radius vector. Computed only every n_arc_correction increments.
       // Compute exact location by applying transformation matrix from initial radius vector(=-offset).
       cos_Ti = cos(i*theta_per_segment);
       sin_Ti = sin(i*theta_per_segment);
@@ -195,7 +206,9 @@ void mc_dwell(float seconds)
 }
 
 
-// Execute homing cycle to locate and set machine zero.
+// Perform homing cycle to locate and set machine zero. Only '$H' executes this command.
+// NOTE: There should be no motions in the buffer and Grbl must be in an idle state before
+// executing the homing cycle. This prevents incorrect buffered plans after homing.
 void mc_go_home()
 {
   plan_synchronize();  // Empty all motions in buffer before homing.
@@ -203,50 +216,60 @@ void mc_go_home()
   PCICR &= ~(1 << LIMIT_INT);   // Disable hard limits pin change interrupt
   #endif
   limits_go_home(); // Perform homing routine.
+  if (sys.abort) { return; } // Did not complete. Alarm state set by mc_alarm.
 
-  // Upon completion, reset all internal position vectors (g-code parser, planner, system)
-  //   sys.position is set to zero when switch triggered
-  //clear_vector_float(sys.position);
-  gc_set_current_position(sys.position[X_AXIS],sys.position[Y_AXIS],sys.position[Z_AXIS]);
-  plan_set_current_position(sys.position[X_AXIS],sys.position[Y_AXIS],sys.position[Z_AXIS]);
+  // The machine should now be homed and machine zero has been located. Upon completion, 
+  // reset system position and sync internal position vectors.
+  clear_vector_float(sys.position); // Set machine zero
+  sys_sync_current_position();
+  sys.state = STATE_IDLE; // Set system state to IDLE to complete motion and indicate homed.
+ 
+#if 0 
+  // Pull-off all axes from limit switches before continuing motion. This provides some initial
+  // clearance off the switches and should also help prevent them from falsely tripping when 
+  // hard limits are enabled.
+  int8_t x_dir, y_dir, z_dir;
+  x_dir = y_dir = z_dir = -1;
+  if (bit_istrue(settings.homing_dir_mask,bit(X_DIRECTION_BIT))) { x_dir = 1; }
+  if (bit_istrue(settings.homing_dir_mask,bit(Y_DIRECTION_BIT))) { y_dir = 1; }
+  if (bit_istrue(settings.homing_dir_mask,bit(Z_DIRECTION_BIT))) { z_dir = 1; }
+  mc_line(x_dir*settings.homing_pulloff, y_dir*settings.homing_pulloff, 
+          z_dir*settings.homing_pulloff, settings.homing_seek_rate, false);
+  st_cycle_start(); // Move it. Nothing should be in the buffer except this motion. 
+  plan_synchronize(); // Make sure the motion completes.
   
-  // If hard limits enabled, move all axes off limit switches before enabling the hard limit
-  // pin change interrupt. This should help prevent the switches from falsely tripping.
-  // NOTE: G-code parser was circumvented so its position needs to be updated explicitly.
-  if (bit_istrue(settings.flags,BITFLAG_HARD_LIMIT_ENABLE)) {
-    int8_t x_dir, y_dir, z_dir;
-    x_dir = y_dir = z_dir = 1;
-    if (bit_istrue(settings.homing_dir_mask,bit(X_DIRECTION_BIT))) { x_dir = -1; }
-    if (bit_istrue(settings.homing_dir_mask,bit(Y_DIRECTION_BIT))) { y_dir = -1; }
-    if (bit_istrue(settings.homing_dir_mask,bit(Z_DIRECTION_BIT))) { z_dir = -1; }
-    mc_line(x_dir*settings.homing_pulloff, y_dir*settings.homing_pulloff, 
-            z_dir*settings.homing_pulloff, settings.homing_feed_rate, false);
-    st_cycle_start(); // Move it. Nothing should be in the buffer except this motion. 
-    plan_synchronize(); // Make sure the motion completes.
-    gc_set_current_position(sys.position[X_AXIS],sys.position[Y_AXIS],sys.position[Z_AXIS]);
-    #ifdef LIMIT_INT
-    PCICR |= (1 << LIMIT_INT);  // Re-enable hard limits.
-    #endif
-  }
+  // The gcode parser position was circumvented by the pull-off maneuver, so sync position vectors.
+  sys_sync_current_position();
+#endif
+  // If hard limits feature enabled, re-enable hard limits pin change register after homing cycle.
+  if (bit_istrue(settings.flags,BITFLAG_HARD_LIMIT_ENABLE)) { LIMIT_PCMSK |= LIMIT_MASK; }
+  // Finished! 
 }
 
 
-// Method to immediately kill all motion and set system alarm. Used by system abort, hard limits,
-// and upon g-code parser error (when installed).
-void mc_alarm()
+// Method to ready the system to reset by setting the runtime reset command and killing any
+// active processes in the system. This also checks if a system reset is issued while Grbl
+// is in a motion state. If so, kills the steppers and sets the system alarm to flag position
+// lost, since there was an abrupt uncontrolled deceleration. Called at an interrupt level by
+// runtime abort command and hard limits. So, keep to a minimum.
+void mc_reset()
 {
-  // Only this function can set the system alarm. This is done to prevent multiple kill calls 
-  // by different processes.
-  if (bit_isfalse(sys.execute, EXEC_ALARM)) {
-    sys.execute |= EXEC_ALARM; // Set alarm to allow subsystem disable for certain settings.
-    sys.auto_start = false; // Disable auto cycle start.
-          
-    // TODO: When Grbl system status is installed, set position lost state if the cycle is active.
-    // if (sys.cycle_start) { POSITION LOST } 
-        
-    // Immediately force stepper, spindle, and coolant to stop.
-    st_go_idle();  
+  // Only this function can set the system reset. Helps prevent multiple kill calls.
+  if (bit_isfalse(sys.execute, EXEC_RESET)) {
+    sys.execute |= EXEC_RESET;
+
+    // Kill spindle and coolant.   
     spindle_stop();
     coolant_stop();
+
+    // Kill steppers only if in any motion state, i.e. cycle, feed hold, homing, or jogging
+    // NOTE: If steppers are kept enabled via the step idle delay setting, this also keeps
+    // the steppers enabled by avoiding the go_idle call altogether, unless the motion state is
+    // violated, by which, all bets are off.
+    switch (sys.state) {
+      case STATE_CYCLE: case STATE_HOLD: case STATE_HOMING: // case STATE_JOG:
+        sys.execute |= EXEC_ALARM; // Execute alarm state.
+        st_go_idle(); // Execute alarm force kills steppers. Position likely lost.
+    }
   }
 }

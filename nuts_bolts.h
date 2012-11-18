@@ -30,16 +30,17 @@
 #define false 0
 #define true 1
 
-#define X_AXIS 0
+#define N_AXIS 3 // Number of axes
+#define X_AXIS 0 // Axis indexing value
 #define Y_AXIS 1
 #define Z_AXIS 2
 
-#define MM_PER_INCH (25.4)
-#define INCH_PER_MM (0.03937)
+#define MM_PER_INCH (25.40)
+#define INCH_PER_MM (0.0393701)
 
 // Useful macros
 #define clear_vector(a) memset(a, 0, sizeof(a))
-#define clear_vector_float(a) memset(a, 0.0, sizeof(a))
+#define clear_vector_float(a) memset(a, 0.0, sizeof(float)*N_AXIS)
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
@@ -62,39 +63,30 @@
 #define EXEC_FEED_HOLD      bit(3) // bitmask 00001000
 #define EXEC_RESET          bit(4) // bitmask 00010000
 #define EXEC_ALARM          bit(5) // bitmask 00100000
-// #define                  bit(6) // bitmask 01000000
+#define EXEC_CRIT_EVENT     bit(6) // bitmask 01000000
 // #define                  bit(7) // bitmask 10000000
 
-// Define bit flag masks for sys.switches. (8 flag limit)
-#define BITFLAG_BLOCK_DELETE  bit(0)
-#define BITFLAG_SINGLE_BLOCK  bit(1)
-#define BITFLAG_OPT_STOP      bit(2)
-// #define                    bit(3)
-// #define                    bit(4)
-// #define                    bit(5)
-// #define                    bit(6)
-// #define                    bit(7)
+// Define system state bit map. The state variable primarily tracks the individual functions
+// of Grbl to manage each without overlapping. It is also used as a messaging flag for
+// critical events.
+#define STATE_IDLE       0 // Must be zero.
+#define STATE_INIT       1 // Initial power up state.
+#define STATE_QUEUED     2 // Indicates buffered blocks, awaiting cycle start.
+#define STATE_CYCLE      3 // Cycle is running
+#define STATE_HOLD       4 // Executing feed hold
+#define STATE_HOMING     5 // Performing homing cycle
+#define STATE_ALARM      6 // In alarm state. Locks out all g-code processes. Allows settings access.
+#define STATE_CHECK_MODE 7 // G-code check mode. Locks out planner and motion only.
+// #define STATE_JOG     8 // Jogging mode is unique like homing.
 
 // Define global system variables
 typedef struct {
   uint8_t abort;                 // System abort flag. Forces exit back to main loop for reset.
-  uint8_t feed_hold;             // Feed hold flag. Held true during feed hold. Released when ready to resume.
-  uint8_t auto_start;            // Planner auto-start flag. Toggled off during feed hold. Defaulted by settings.
-//   uint8_t switches;              // Switches state bitflag variable. For settings not governed by g-code.
-  
-  int32_t position[3];           // Real-time machine (aka home) position vector in steps. 
-                                 // NOTE: This may need to be a volatile variable, if problems arise. 
-
-  uint8_t coord_select;          // Active work coordinate system number. Default: 0=G54.
-  float coord_system[N_COORDINATE_SYSTEM][3]; // Work coordinate systems (G54+). Stores offset from
-  															 // absolute machine position in mm.
-                                 // Rows: Work system number (0=G54,1=G55,...5=G59), Columns: XYZ Offsets
-  float coord_offset[3];        // Retains the G92 coordinate offset (work coordinates) relative to
-                                 // machine zero in mm.
-                          
-  volatile uint8_t cycle_start;  // Cycle start flag. Set by stepper subsystem or main program. 
+  uint8_t state;                 // Tracks the current state of Grbl.
   volatile uint8_t execute;      // Global system runtime executor bitflag variable. See EXEC bitmasks.
-  
+  int32_t position[N_AXIS];      // Real-time machine (aka home) position vector in steps. 
+                                 // NOTE: This may need to be a volatile variable, if problems arise.   
+  uint8_t auto_start;            // Planner auto-start flag. Toggled off during feed hold. Defaulted by settings.
 } system_t;
 extern system_t sys;
 
@@ -108,5 +100,8 @@ void delay_ms(uint16_t ms);
 
 // Delays variable-defined microseconds. Compiler compatibility fix for _delay_us().
 void delay_us(uint32_t us);
+
+// Syncs Grbl's gcode and planner position variables with the system position.
+void sys_sync_current_position();
 
 #endif

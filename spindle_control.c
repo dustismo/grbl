@@ -19,14 +19,9 @@
   along with Grbl.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "spindle_control.h"
 #include "settings.h"
-#include "motion_control.h"
-#include "config.h"
+#include "spindle_control.h"
 #include "planner.h"
-#include "stepper.h"
-
-#include <stdint.h>
 
 static uint8_t current_direction;
 
@@ -47,7 +42,7 @@ void spindle_stop()
 #endif
 }
 
-void spindle_run(int8_t direction, uint16_t rpm) 
+void spindle_run(int8_t direction) //, uint16_t rpm) 
 {
 #ifdef SPINDLE_PRESENT
   if (direction != current_direction) {

@@ -22,7 +22,10 @@
 #ifndef planner_h
 #define planner_h
                  
-#include <inttypes.h>
+// The number of linear motions that can be in the plan at any give time
+#ifndef BLOCK_BUFFER_SIZE
+  #define BLOCK_BUFFER_SIZE 18
+#endif
 
 // This struct is used when buffering the setup for each linear movement "nominal" values are as specified in 
 // the source g-code and may never actually be reached if acceleration management is active.
@@ -68,9 +71,6 @@ block_t *plan_get_current_block();
 
 // Reset the planner position vector (in steps)
 void plan_set_current_position(int32_t x, int32_t y, int32_t z);
-
-// Clear the planner position vector
-void plan_clear_position();
 
 // Reinitialize plan with a partially completed block
 void plan_cycle_reinitialize(int32_t step_events_remaining);

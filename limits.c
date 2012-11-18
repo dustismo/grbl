@@ -32,10 +32,11 @@
 #include "planner.h"
 #include "protocol.h"
 #include "limits.h"
-//#ifdef MCP23017_HOME_LIMIT_POLL
+#include "report.h"
+#ifdef USE_I2C_LIMITS
 #include "MCP23017.h"
 #include "twi.h"
-//#endif
+#endif
 
 #include "print.h"
 #include <avr/pgmspace.h>
@@ -49,31 +50,41 @@ void limits_init()
   LIMIT_PORT |= (LIMIT_MASK); // Enable internal pull-up resistors. Normal high operation.
 
   if (bit_istrue(settings.flags,BITFLAG_HARD_LIMIT_ENABLE)) {
-    LIMIT_PCMSK |= LIMIT_MASK;   // Enable specific pins of the Pin Change Interrupt
-    PCICR |= (1 << LIMIT_INT);   // Enable Pin Change Interrupt
+    LIMIT_PCMSK |= LIMIT_MASK; // Enable specific pins of the Pin Change Interrupt
+    PCICR |= (1 << LIMIT_INT); // Enable Pin Change Interrupt
+  } else {
+    LIMIT_PCMSK &= ~LIMIT_MASK; // Disable
+    PCICR &= ~(1 << LIMIT_INT); 
   }
 }
 
-
-// This is the Limit Pin Change Interrupt, which handles the hard limit feature.
+// This is the Limit Pin Change Interrupt, which handles the hard limit feature. A bouncing 
+// limit switch can cause a lot of problems, like false readings and multiple interrupt calls.
+// If a switch is triggered at all, something bad has happened and treat it as such, regardless
+// if a limit switch is being disengaged. It's impossible to reliably tell the state of a 
+// bouncing pin without a debouncing method.
 // NOTE: Do not attach an e-stop to the limit pins, because this interrupt is disabled during
 // homing cycles and will not respond correctly. Upon user request or need, there may be a
 // special pinout for an e-stop, but it is generally recommended to just directly connect
 // your e-stop switch to the Arduino reset pin, since it is the most correct way to do this.
 ISR(LIMIT_INT_vect) 
 {
-  // Only enter if the system alarm is not active.
-  if (bit_isfalse(sys.execute,EXEC_ALARM)) { 
-    // Kill all processes upon hard limit event.
-    if ((LIMIT_PIN & LIMIT_MASK) ^ LIMIT_MASK) {
-      mc_alarm(); // Initiate system kill.
-      protocol_status_message(STATUS_HARD_LIMIT); // Print ok in interrupt since system killed.
-    } 
-    // else {
-    //   TODO: When leaving a switch, this interrupt can be activated upon detecting a pin
-    //   change to high. If so, need to start a countdown timer to check the pin again after
-    //   a debounce period to not falsely re-engage the alarm. Not essential, but *could* be
-    //   a minor annoyance.
+  // TODO: This interrupt may be used to manage the homing cycle directly with the main stepper
+  // interrupt without adding too much to it. All it would need is some way to stop one axis 
+  // when its limit is triggered and continue the others. This may reduce some of the code, but
+  // would make Grbl a little harder to read and understand down road. Holding off on this until
+  // we move on to new hardware or flash space becomes an issue. If it ain't broke, don't fix it.
+
+  // Ignore limit switches if already in an alarm state or in-process of executing an alarm.
+  // When in the alarm state, Grbl should have been reset or will force a reset, so any pending 
+  // moves in the planner and serial buffers are all cleared and newly sent blocks will be 
+  // locked out until a homing cycle or a kill lock command. Allows the user to disable the hard
+  // limit setting if their limits are constantly triggering after a reset and move their axes.
+  if (sys.state != STATE_ALARM) { 
+    if (bit_isfalse(sys.execute,EXEC_ALARM)) {
+      mc_reset(); // Initiate system kill.
+      sys.execute |= EXEC_CRIT_EVENT; // Indicate hard limit critical event
+    }
   }
 }
 #else
@@ -384,5 +395,5 @@ void limits_go_home()
   run_independent_move(hm);
 #endif  
 
-  st_go_idle();
+  st_go_idle(); // Call main stepper shutdown routine.  
 }

@@ -40,6 +40,9 @@ typedef struct indep_t *indep_t_ptr;
 // Initialize and setup the stepper motor subsystem
 void st_init();
 
+// Enable steppers, but cycle does not start unless called by motion control or runtime command.
+void st_wake_up();
+
 // Immediately disables steppers
 void st_go_idle();
 
