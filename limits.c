@@ -131,7 +131,7 @@ home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.25; // mm/min^2; 0
 #ifdef USE_I2C_LIMITS
 static uint8_t mcp23017_pins[2];
 inline uint8_t home_limit_state() {
-  twi_nonBlockingReadFrom(i2caddr, mcp23017_pins, 2);
+  //twi_nonBlockingReadFrom(i2caddr, mcp23017_pins, 2);
   return (volatile uint8_t)mcp23017_pins[0];
 }
 #else
@@ -154,7 +154,7 @@ bool indep_increment(indep_t_ptr ht)
   if(ht->state==decel) {
     ht->dpdt -= ht->d2pdt2d;
     if(ht->dpdt<=0) {
-      if((ht->flags & INDEP_HOMING) || sys.feed_hold) {
+      if((ht->flags & INDEP_HOMING) || (sys.state == STATE_HOLD)) {
         ht->state = done;
         return false;
       } else {
@@ -177,7 +177,7 @@ bool indep_increment(indep_t_ptr ht)
       ht->flags |= INDEP_HIT_HOME;
     } else if ( (!(ht->flags & INDEP_NO_TARGET)
                 && (sys.position[ht->axis]==ht->decel_pos))
-               || sys.feed_hold ) {
+               || (sys.state == STATE_HOLD) ) {
       ht->state = decel;
     }
   }
@@ -191,9 +191,11 @@ static void run_independent_move(indep_t_ptr frame) {
   #endif
   for(;;) {
     if(!indep_mode) {
+      //printPgmString(PSTR("st_indep_start\r\n"));
       st_indep_start(frame);
     }
     // Check if we are done or for system abort
+    //printPgmString(PSTR("+"));
     protocol_execute_runtime();
     bool complete = true;   
     indep_t_ptr it = frame;
@@ -202,7 +204,10 @@ static void run_independent_move(indep_t_ptr frame) {
         complete = false; }
       it = it->next_axis;
     }
+    //printPgmString(PSTR("."));
+
     if(complete || sys.abort) {
+      //printPgmString(PSTR("..complete\r\n"));
       st_go_idle();
       indep_mode = false;
       return;
@@ -227,6 +232,7 @@ void homing_cycle(uint8_t x_axis, uint8_t x2_axis, uint8_t y_axis, uint8_t z_axi
   if (!pos_dir) { out_bits0 ^= DIRECTION_MASK; }   // Invert bits, if negative dir.
   
   // enable stepper drives (optionally enable slave axis X2)
+  // TBD: handle settings.flags BITFLAG_INVERT_ST_ENABLE 
   uint8_t disable_bits_to_set;
   if(x2_axis) { disable_bits_to_set = STEPPERS_DISABLE_INVERT_MASK & STEPPERS_DISABLE_MASK; }
   else { disable_bits_to_set = (STEPPERS_DISABLE_INVERT_MASK^(1<<X2_DISABLE_BIT)) & STEPPERS_DISABLE_MASK; }
@@ -292,10 +298,12 @@ void limits_go_home()
 {
   plan_synchronize();  // Empty all motions in buffer.
   // Z-axis homing
+  //printPgmString(PSTR("Zaxis home\r\n"));
   homing_cycle(ax_stop, slave_stop, ax_stop, ax_fast, dir_neg); // z axis approach home
   homing_cycle(ax_stop, slave_stop, ax_stop, ax_slow, dir_pos); // z back off
 
   // X- and Y-axis seek home simultaneously
+  printPgmString(PSTR("XYaxis home\r\n"));
   homing_cycle(ax_fast, slave_run_watch_both, ax_fast, ax_stop, dir_neg); // x and y axis approach home
   homing_cycle(ax_stop, slave_stop, ax_slow, ax_stop, dir_pos); // y back off 
   // X-axis master/slave homing
@@ -322,6 +330,7 @@ void limits_go_home()
   uint8_t n = (x_axis!=0) + (y_axis!=0) + (z_axis!=0);
   uint32_t dt = 1000000L/HOME_EVENTS_PER_SECOND; // usec/step
   out_bits0 = (out_bits0 & ~DIRECTION_MASK);
+  // TBD: handle settings.flags BITFLAG_INVERT_ST_ENABLE 
   STEPPERS_DISABLE_PORT = (STEPPERS_DISABLE_PORT & ~STEPPERS_DISABLE_MASK)
                           | (STEPPERS_DISABLE_INVERT_MASK & STEPPERS_DISABLE_MASK);
                           

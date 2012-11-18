@@ -50,11 +50,14 @@
 #undef STEPPERS_DISABLE_DDR
 #undef STEPPERS_DISABLE_PORT
 #undef STEPPERS_DISABLE_BIT
+#undef STEPPERS_DISABLE_MASK
 #undef STEPPERS_DISABLE_INVERT_MASK
 #define STEPPERS_DISABLE_DDR    DDRD
 #define STEPPERS_DISABLE_PORT   PORTD
 #define STEPPERS_DISABLE_BIT    4  // Uno Digital Pin 4
 #define X2_DISABLE_BIT          3  // Uno Digital Pin 3  Hi disables X2
+#define STEPPERS_DISABLE_MASK ((1<<STEPPERS_DISABLE_BIT)|(1<<X2_DISABLE_BIT))
+
 #define STEPPERS_DISABLE_INVERT_MASK  (1<<STEPPERS_DISABLE_BIT) // Logic low out for disable (e.g. steppernug)
 
 #undef LIMIT_DDR
@@ -63,6 +66,8 @@
 #undef X_LIMIT_BIT
 #undef Y_LIMIT_BIT
 #undef Z_LIMIT_BIT
+#undef LIMIT_MASK
+#undef HOME_MASK
 
 #define USE_I2C_LIMITS
 
@@ -95,6 +100,8 @@
 #define X2_HOME_BIT  2  // Uno Digital Pin 2 (INT0)
 
 #endif
+#define LIMIT_MASK ((1<<X_LIMIT_BIT)|(1<<X2_LIMIT_BIT)|(1<<Y_LIMIT_BIT)|(1<<Z_LIMIT_BIT)) // All limit bits
+#define HOME_MASK ((1<<X_HOME_BIT)|(1<<X2_HOME_BIT)|(1<<Y_HOME_BIT)|(1<<Z_HOME_BIT)) // All limit bits
 #define LIMITS_INVERT_MASK 0
 
 #undef SPINDLE_PRESENT

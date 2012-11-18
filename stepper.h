@@ -34,8 +34,6 @@ typedef struct indep_t *indep_t_ptr;
 #define DIRECTION_MASK ((1<<X_DIRECTION_BIT)|(1<<Y_DIRECTION_BIT)|(1<<Z_DIRECTION_BIT)) // All direction bits
 #define STEPPING_MASK (STEP_MASK | DIRECTION_MASK) // All stepping-related bits (step/direction)
 
-#define STEPPERS_DISABLE_MASK ((1<<STEPPERS_DISABLE_BIT)|(1<<X2_DISABLE_BIT))
-
 
 // Initialize and setup the stepper motor subsystem
 void st_init();

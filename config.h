@@ -44,6 +44,7 @@
 #define STEPPERS_DISABLE_PORT   PORTB
 #define STEPPERS_DISABLE_BIT    0  // Uno Digital Pin 8
 #define STEPPERS_DISABLE_MASK (1<<STEPPERS_DISABLE_BIT)
+#define STEPPERS_DISABLE_INVERT_MASK  0 // see also settings.flags BITFLAG_INVERT_ST_ENABLE 
 
 // NOTE: All limit bit pins must be on the same port
 #define LIMIT_DDR       DDRB
@@ -56,6 +57,7 @@
 #define LIMIT_INT_vect  PCINT0_vect 
 #define LIMIT_PCMSK     PCMSK0 // Pin change interrupt register
 #define LIMIT_MASK ((1<<X_LIMIT_BIT)|(1<<Y_LIMIT_BIT)|(1<<Z_LIMIT_BIT)) // All limit bits
+#define HOME_MASK LIMIT_MASK
 
 #define SPINDLE_PRESENT
 #define SPINDLE_ENABLE_DDR   DDRB
