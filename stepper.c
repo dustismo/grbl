@@ -113,7 +113,6 @@ static void inline enable_steppers() {
 // enabled. Startup init and limits call this function but shouldn't start the cycle.
 void st_wake_up() 
 {
-  enable_steppers();
   if (sys.state == STATE_CYCLE || sys.state == STATE_HOMING) {
     // Initialize stepper output bits
     out_bits = out_bits0; 
@@ -509,6 +508,7 @@ void st_init()
   #endif
 
   // Start in the idle state, but first wake up to check for keep steppers enabled option.
+  enable_steppers();
   st_wake_up();
   st_go_idle();
 }
@@ -567,6 +567,7 @@ void st_cycle_start()
 {
   if (sys.state == STATE_QUEUED) {
     sys.state = STATE_CYCLE;
+    enable_steppers();
     st_wake_up();
   }
 }

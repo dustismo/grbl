@@ -40,6 +40,9 @@
 #undef X_DIRECTION_BIT
 #undef Y_DIRECTION_BIT
 #undef Z_DIRECTION_BIT
+#undef STEP_MASK
+#undef DIRECTION_MASK
+#undef STEPPING_MASK
 #define X_STEP_BIT         5  // Uno Digital Pin 13
 #define Y_STEP_BIT         3  // Uno Digital Pin 11
 #define Z_STEP_BIT         1  // Uno Digital Pin 9
