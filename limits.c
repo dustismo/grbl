@@ -191,11 +191,9 @@ static void run_independent_move(indep_t_ptr frame) {
   #endif
   for(;;) {
     if(!indep_mode) {
-      //printPgmString(PSTR("st_indep_start\r\n"));
       st_indep_start(frame);
     }
     // Check if we are done or for system abort
-    //printPgmString(PSTR("+"));
     protocol_execute_runtime();
     bool complete = true;   
     indep_t_ptr it = frame;
@@ -204,10 +202,8 @@ static void run_independent_move(indep_t_ptr frame) {
         complete = false; }
       it = it->next_axis;
     }
-    //printPgmString(PSTR("."));
 
     if(complete || sys.abort) {
-      //printPgmString(PSTR("..complete\r\n"));
       st_go_idle();
       indep_mode = false;
       return;
@@ -236,8 +232,6 @@ void homing_cycle(uint8_t x_axis, uint8_t x2_axis, uint8_t y_axis, uint8_t z_axi
   uint8_t disable_bits_to_set;
   if(x2_axis) { disable_bits_to_set = STEPPERS_DISABLE_INVERT_MASK & STEPPERS_DISABLE_MASK; }
   else { disable_bits_to_set = (STEPPERS_DISABLE_INVERT_MASK^(1<<X2_DISABLE_BIT)) & STEPPERS_DISABLE_MASK; }
-  print_uint8_base2(disable_bits_to_set);
-  printPgmString(PSTR(" \r\n"));
   STEPPERS_DISABLE_PORT = (STEPPERS_DISABLE_PORT & ~STEPPERS_DISABLE_MASK) | disable_bits_to_set;
 
   // Create the n frames defining n independent movements (n = number of axes moving)
@@ -300,12 +294,10 @@ void limits_go_home()
 {
   plan_synchronize();  // Empty all motions in buffer.
   // Z-axis homing
-  //printPgmString(PSTR("Zaxis home\r\n"));
   homing_cycle(ax_stop, slave_stop, ax_stop, ax_fast, dir_neg); // z axis approach home
   homing_cycle(ax_stop, slave_stop, ax_stop, ax_slow, dir_pos); // z back off
 
   // X- and Y-axis seek home simultaneously
-  printPgmString(PSTR("XYaxis home\r\n"));
   homing_cycle(ax_fast, slave_run_watch_both, ax_fast, ax_stop, dir_neg); // x and y axis approach home
   homing_cycle(ax_stop, slave_stop, ax_slow, ax_stop, dir_pos); // y back off 
   // X-axis master/slave homing

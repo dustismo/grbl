@@ -109,8 +109,9 @@ static void inline enable_steppers() {
                           | (STEPPERS_DISABLE_INVERT_MASK & STEPPERS_DISABLE_MASK); }
 
 
-// Stepper state initialization. Cycle should only start if the st.cycle_start flag is
-// enabled. Startup init and limits call this function but shouldn't start the cycle.
+// Stepper state initialization. Motion should only start if cycle or homing is in progress
+// Startup init and limits call this function but shouldn't start the cycle.
+// Caller (st_cycle_start or st_indep_start) should enable steppers first.
 void st_wake_up() 
 {
   if (sys.state == STATE_CYCLE || sys.state == STATE_HOMING) {
