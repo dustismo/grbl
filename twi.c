@@ -212,12 +212,12 @@ uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait
     uint8_t sreg_save = SREG; 
     cli(); 
     if(TWI_READY == twi_state) {
+      twi_state = TWI_MTX;
       SREG = sreg_save; 
       break;
     }
     SREG = sreg_save; 
   }
-  twi_state = TWI_MTX;
   
   // reset error state (0xFF.. no error occured)
   twi_error = 0xFF;
