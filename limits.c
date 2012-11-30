@@ -116,7 +116,7 @@ static struct {
 void home_init() {
 home_params[X_AXIS].rate[0] = settings.homing_seek_rate; // mm/min
 home_params[X_AXIS].rate[1] = settings.homing_feed_rate; // mm/min
-home_params[X_AXIS].decel = home_params[X_AXIS].rate[0]*60./0.1; // mm/min^2; 0.1 sec to stop
+home_params[X_AXIS].decel = home_params[X_AXIS].rate[0]*60./0.1; // mm/min^2; 0.5 sec to stop
 home_params[X_AXIS].accel_ratio = 20;
 home_params[Y_AXIS].rate[0] = settings.homing_seek_rate; // mm/min
 home_params[Y_AXIS].rate[1] = settings.homing_feed_rate; // mm/min
@@ -125,7 +125,7 @@ home_params[Y_AXIS].decel = home_params[Y_AXIS].rate[0]*60./0.5; // mm/min^2; 0.
 home_params[Z_AXIS].rate[0] = settings.homing_seek_rate; // mm/min
 home_params[Z_AXIS].rate[1] = settings.homing_feed_rate; // mm/min
 home_params[Z_AXIS].accel_ratio = 50;
-home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.25; // mm/min^2; 0.25 sec to stop
+home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.1; // mm/min^2; 0.1 sec to stop
 }
 
 #ifdef USE_I2C_LIMITS
@@ -298,6 +298,7 @@ void limits_go_home()
   homing_cycle(ax_stop, slave_stop, ax_stop, ax_slow, dir_pos); // z back off
 
   // X- and Y-axis seek home simultaneously
+  homing_cycle(ax_fast, slave_run_watch_both, ax_fast, ax_stop, dir_pos); // x and y axis away from home
   homing_cycle(ax_fast, slave_run_watch_both, ax_fast, ax_stop, dir_neg); // x and y axis approach home
   homing_cycle(ax_stop, slave_stop, ax_slow, ax_stop, dir_pos); // y back off 
   // X-axis master/slave homing
