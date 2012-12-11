@@ -33,11 +33,12 @@
 #define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
 #endif
 
-//#include "pins_arduino.h"
+#define TWI_BUFFER_LENGTH 8
 #include "twi.h"
 
 static volatile uint8_t twi_state;
 static uint8_t twi_slarw;
+static uint8_t twi_reg;
 
 static uint8_t twi_masterBuffer[TWI_BUFFER_LENGTH];
 static volatile uint8_t twi_masterBufferIndex;
@@ -156,6 +157,56 @@ int8_t twi_nonBlockingReadFrom(uint8_t address, uint8_t* data, uint8_t length)
   TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
 
   return 0;
+}
+
+// for non-blocking register read, we pass a one-byte register address. The
+// interrupt service sends the register address, then fills user buffer in background
+// returns immediately with status -1 = busy, or 0 = read operation initiated.
+// For a device like MCP23017, this makes a unitary transaction which can be
+// interspersed with other transactions to the same device (e.g. from other threads)
+int8_t twi_nonBlockingReadRegisterFrom(uint8_t address, uint8_t reg, uint8_t* data, uint8_t length)
+{
+  // if twi is ready, become master transmitter
+  // use interrupt guard around twi_state test-and-set
+  uint8_t sreg_save = SREG; 
+  cli(); 
+  if(TWI_READY != twi_state){
+    SREG = sreg_save; 
+    return -1; // busy
+  }
+  twi_state = TWI_MTRX;
+  SREG = sreg_save; 
+  
+  // reset error state (0xFF.. no error occured)
+  twi_error = 0xFF;
+  // initialize register pointer
+  twi_reg = reg;
+  // initialize buffer iteration vars
+  twi_masterBufferPtr=data;
+  twi_masterBufferIndex = 0;
+  twi_masterBufferLength = length-1;  // This is not intuitive, read on...
+  // On receive, the previously configured ACK/NACK setting is transmitted in
+  // response to the received byte before the interrupt is signalled. 
+  // Therefor we must actually set NACK when the _next_ to last byte is
+  // received, causing that NACK to be sent in response to receiving the last
+  // expected byte of data.
+
+  // build sla+w, slave device address + w bit
+  twi_slarw = TW_WRITE;
+  twi_slarw |= address << 1;
+  
+  // send start condition
+  TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
+
+  // wait for write operation to complete
+  while((TWI_MRX == twi_state) || (TWI_MTRX == twi_state)){
+    continue;
+  }
+  
+  if (twi_error == 0xFF)
+    return 0;	// success
+  else
+    return -2;	// other twi error
 }
 
 
@@ -299,7 +350,18 @@ SIGNAL(TWI_vect)
 
     // Master Transmitter
     case TW_MT_SLA_ACK:  // slave receiver acked address
+      if(twi_state==TWI_MTRX) {
+        TWDR = twi_reg;
+        twi_reply(1);
+        break;
+      }
     case TW_MT_DATA_ACK: // slave receiver acked data
+      if(twi_state==TWI_MTRX) {
+        // sent register adder; switch to RX mode and issue repeated start
+        twi_slarw |= TW_READ;
+        TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
+        break;
+      }
       // if there is data to send, send it, otherwise stop 
       if(twi_masterBufferIndex < twi_masterBufferLength){
         // copy data to output register and ack
