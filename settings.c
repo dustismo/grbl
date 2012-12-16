@@ -191,8 +191,14 @@ uint8_t settings_store_global_setting(int parameter, float value) {
       else { settings.flags &= ~BITFLAG_HOMING_ENABLE; }
       break;
     case 18: settings.homing_dir_mask = trunc(value); break;
-    case 19: settings.homing_feed_rate = value; break;
-    case 20: settings.homing_seek_rate = value; break;
+    case 19:
+      settings.homing_feed_rate = value;
+      home_init(); // Re-init to immediately change.
+      break;
+    case 20:
+      settings.homing_seek_rate = value;
+      home_init(); // Re-init to immediately change.
+      break;
     case 21: settings.homing_debounce_delay = round(value); break;
     case 22: settings.homing_pulloff = value; break;
     default: 
