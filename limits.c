@@ -131,7 +131,7 @@ home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.1; // mm/min^2; 0.
 #ifdef USE_I2C_LIMITS
 static uint8_t mcp23017_pins[2];
 inline uint8_t home_limit_state() {
-  twi_nonBlockingReadFrom(i2caddr, mcp23017_pins, 2);
+  twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_GPIOA, mcp23017_pins, 2);
   return (volatile uint8_t)mcp23017_pins[0];
 }
 #else

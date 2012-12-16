@@ -345,14 +345,14 @@ SIGNAL(TWI_vect)
     case TW_REP_START: // sent repeated start condition
       // copy device address and r/w bit to output register and ack
       TWDR = twi_slarw;
-      twi_reply(1);
+      twi_reply(1); // ack
       break;
 
     // Master Transmitter
     case TW_MT_SLA_ACK:  // slave receiver acked address
       if(twi_state==TWI_MTRX) {
         TWDR = twi_reg;
-        twi_reply(1);
+        twi_reply(1); // ack
         break;
       }
     case TW_MT_DATA_ACK: // slave receiver acked data
@@ -366,7 +366,7 @@ SIGNAL(TWI_vect)
       if(twi_masterBufferIndex < twi_masterBufferLength){
         // copy data to output register and ack
         TWDR = *(twi_masterBufferPtr+twi_masterBufferIndex++);
-        twi_reply(1);
+        twi_reply(1); // ack
       }else{
         twi_stop();
       }
@@ -391,9 +391,9 @@ SIGNAL(TWI_vect)
     case TW_MR_SLA_ACK:  // address sent, ack received
       // ack if more bytes are expected, otherwise nack
       if(twi_masterBufferIndex < twi_masterBufferLength){
-        twi_reply(1);
+        twi_reply(1); // ack
       }else{
-        twi_reply(0);
+        twi_reply(0); // nack; next byte recvd will be last
       }
       break;
     case TW_MR_DATA_NACK: // data received, nack sent
