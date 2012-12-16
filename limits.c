@@ -321,7 +321,7 @@ void limits_go_home()
 #if 0
   // sample code to test independent point-to-point positioning
   //  bug warning: this isn't reliable when all 3 axes are commanded
-  uint8_t x_axis=0, y_axis=1, z_axis=1;
+  uint8_t x_axis=2, y_axis=2, z_axis=1;
   uint8_t n = (x_axis!=0) + (y_axis!=0) + (z_axis!=0);
   uint32_t dt = 1000000L/HOME_EVENTS_PER_SECOND; // usec/step
   out_bits0 = (out_bits0 & ~DIRECTION_MASK);
@@ -337,7 +337,7 @@ void limits_go_home()
   
   for(ax=0; ax<3; ax++) {
     int32_t start_pos = sys.position[ax];
-    int32_t target_pos = -50.*(ax+1)*settings.steps_per_mm[ax];
+    int32_t target_pos = 5.*(ax+1)*settings.steps_per_mm[ax];
     bool negative_move = (target_pos < start_pos);
     
     switch(ax) {

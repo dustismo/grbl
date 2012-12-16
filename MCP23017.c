@@ -33,12 +33,9 @@ void MCP23017_begin(uint8_t addr) {
   // set up IOCON.SEQOP=1, BANK=0 to read repeatedly from both input latches
   localbuf[0]=MCP23017_IOCONA; localbuf[1]=0x20; 
   twi_writeTo(i2caddr, localbuf, 2, DO_WAIT);
-  // set address pointer to GPIO
-  localbuf[0]=MCP23017_GPIOA;
-  twi_writeTo(i2caddr, localbuf, 1, DO_WAIT);
-  // read?
-  twi_nonBlockingReadFrom(i2caddr, localbuf, 2);
-
+  // try out new read function  
+  //while(-1 == twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_GPIOA, localbuf, 2)) { }
+  
   #endif
 }
 
