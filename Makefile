@@ -41,7 +41,7 @@ OBJECTS    = main.o motion_control.o gcode.o spindle_control.o coolant_control.o
 # Tune the lines below only if you know what you are doing:
 
 AVRDUDE = avrdude $(PROGRAMMER) -p $(DEVICE) -B 10 -F
-COMPILE = avr-gcc -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) -I. -ffunction-sections
+COMPILE = avr-gcc -Wall -ggdb -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE) -I. -ffunction-sections 
 
 # symbolic targets:
 all:	grbl.hex
@@ -89,7 +89,7 @@ grbl.hex: main.elf
 
 # Targets for code debugging and analysis:
 disasm:	main.elf
-	avr-objdump -d main.elf
+	avr-objdump -S main.elf
 
 cpp:
 	$(COMPILE) -E main.c

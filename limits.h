@@ -22,7 +22,7 @@
 #define limits_h 
 
 
-#define HOME_EVENTS_PER_SECOND (1000L)
+#define HOME_EVENTS_PER_SECOND (10000L)
 #define INDEP_EVENT_COUNT (1L<<30)
 
 extern uint8_t potential_hardlimit;

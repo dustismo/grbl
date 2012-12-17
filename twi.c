@@ -198,11 +198,7 @@ int8_t twi_nonBlockingReadRegisterFrom(uint8_t address, uint8_t reg, uint8_t* da
   // send start condition
   TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
 
-  // wait for write operation to complete
-  while((TWI_MRX == twi_state) || (TWI_MTRX == twi_state)){
-    continue;
-  }
-  
+ 
   if (twi_error == 0xFF)
     return 0;	// success
   else
