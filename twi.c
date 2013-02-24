@@ -39,6 +39,8 @@
 static volatile uint8_t twi_state;
 static uint8_t twi_slarw;
 static uint8_t twi_reg;
+static uint8_t twi_rmw_data;
+static uint8_t twi_rmw_mask;
 
 static uint8_t twi_masterBuffer[TWI_BUFFER_LENGTH];
 static volatile uint8_t twi_masterBufferIndex;
@@ -280,7 +282,122 @@ uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait
     return 4;	// other twi error
 }
 
+// for register read-modify-write, we pass a one-byte register address. 
+// returns immediately with status -1 = busy, or 0 = read operation initiated.
+// For a device like MCP23017, this makes a unitary transaction which can be
+// interspersed with other transactions to the same device (e.g. from other threads)
+int8_t twi_writeRegisterMaskedOneByte(uint8_t address, uint8_t reg, uint8_t data, uint8_t mask)
+{
+  // if twi is ready, become master transmitter
+  // use interrupt guard around twi_state test-and-set
+  uint8_t sreg_save = SREG; 
+  cli(); 
+  if(TWI_READY != twi_state){
+    SREG = sreg_save; 
+    return -1; // busy
+  }
+  twi_state = TWI_M_RMW;
+  SREG = sreg_save; 
 
+  twi_rmw_data = data;
+  twi_rmw_mask = mask;  
+  // reset error state (0xFF.. no error occured)
+  twi_error = 0xFF;
+  // initialize register pointer
+  twi_reg = reg;
+  // initialize buffer iteration vars
+  twi_masterBufferPtr=twi_masterBuffer;
+  twi_masterBufferIndex = 0;
+  twi_masterBufferLength = 0; 
+
+  // build sla+w, slave device address + w bit
+  twi_slarw = TW_WRITE;
+  twi_slarw |= address << 1;
+  
+  // send start condition
+  TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
+
+ 
+  if (twi_error == 0xFF)
+    return 0;	// success
+  else
+    return -2;	// other twi error
+}
+
+
+/************** transaction queue management ***************/
+
+twi_transaction_read* twi_read_queue[TWI_RD_TRANS_QUEUE_SIZE];
+twi_transaction_write_one_masked* twi_wr1_queue[TWI_WR1_TRANS_QUEUE_SIZE];
+
+void twi_queue_init() {
+  uint8_t i;
+  for(i=0; i<TWI_RD_TRANS_QUEUE_SIZE; i++) {
+    twi_read_queue[i] = NULL;
+  }
+  for(i=0; i<TWI_WR1_TRANS_QUEUE_SIZE; i++) {
+    twi_wr1_queue[i] = NULL;
+  }
+}
+
+// check for pending transactions and initiate highest priority one
+//
+#define MAX_Q (TWI_RD_TRANS_QUEUE_SIZE < TWI_WR1_TRANS_QUEUE_SIZE) ? \
+                TWI_RD_TRANS_QUEUE_SIZE : TWI_WR1_TRANS_QUEUE_SIZE 
+void twi_check_queues () {
+  uint8_t p;
+  for(p=0; p<MAX_Q; p++) {
+    twi_transaction_read** tr = twi_read_queue+p;
+    if (p<TWI_RD_TRANS_QUEUE_SIZE && *tr!= NULL) {
+      twi_nonBlockingReadRegisterFrom((*tr)->address, (*tr)->reg, (*tr)->data, (*tr)->length);
+      *tr = NULL;
+      return;
+    }
+    twi_transaction_write_one_masked** tw1 = twi_wr1_queue+p;
+    if (p<TWI_WR1_TRANS_QUEUE_SIZE && tw1!=NULL) {
+      twi_writeRegisterMaskedOneByte((*tw1)->address, (*tw1)->reg, (*tw1)->data, (*tw1)->mask);
+      *tw1 = NULL;
+      return;
+    }
+  }
+}
+int8_t twi_queue_read_transaction(twi_transaction_read* trans, uint8_t priority) {
+  if (priority>=TWI_RD_TRANS_QUEUE_SIZE) {
+    return -2; // invalid priority level
+  }
+  uint8_t sreg_save = SREG; 
+  cli(); 
+  if(twi_read_queue[priority] != NULL) {
+    SREG = sreg_save; 
+    return -1; // busy
+  }
+  twi_read_queue[priority] = trans;
+  SREG = sreg_save;
+  return 0; // success
+}
+
+int8_t twi_queue_write_one_masked_transaction(twi_transaction_write_one_masked* trans, uint8_t priority) {
+  if (priority>=TWI_WR1_TRANS_QUEUE_SIZE) {
+    return -2; // invalid priority level
+  }
+  uint8_t rv = 0;
+  uint8_t sreg_save = SREG; 
+  cli(); 
+  if(twi_wr1_queue[priority] != NULL) {
+    rv = -1; // busy
+  } else {
+    twi_wr1_queue[priority] = trans;
+    if(twi_state==TWI_READY) {
+      twi_check_queues();
+    }
+  }
+  SREG = sreg_save;
+  return rv;
+}
+
+
+  
+/************** low level interrupt service routines   ****************/
 /* 
  * Function twi_reply
  * Desc     sends byte or readys receive line
@@ -316,6 +433,9 @@ void twi_stop(void)
 
   // update twi state
   twi_state = TWI_READY;
+  #if 1
+  twi_check_queues();
+  #endif
 }
 
 /* 
@@ -346,13 +466,13 @@ SIGNAL(TWI_vect)
 
     // Master Transmitter
     case TW_MT_SLA_ACK:  // slave receiver acked address
-      if(twi_state==TWI_MTRX) {
+      if(twi_state==TWI_MTRX || twi_state==TWI_M_RMW) {
         TWDR = twi_reg;
         twi_reply(1); // ack
         break;
       }
     case TW_MT_DATA_ACK: // slave receiver acked data
-      if(twi_state==TWI_MTRX) {
+      if(twi_state==TWI_MTRX || twi_state==TWI_M_RMW) {
         // sent register adder; switch to RX mode and issue repeated start
         twi_slarw |= TW_READ;
         TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
@@ -395,6 +515,19 @@ SIGNAL(TWI_vect)
     case TW_MR_DATA_NACK: // data received, nack sent
       // put final byte into buffer
       *(twi_masterBufferPtr+twi_masterBufferIndex++) = TWDR;
+      if(twi_state==TWI_M_RMW) {
+        // finished read phase of read-modify-write operation;
+        // move modified data into 2nd buffer byte & put register value in 1st
+        *(twi_masterBufferPtr+1) = *twi_masterBufferPtr & ~twi_rmw_mask
+                                   | (twi_rmw_data & twi_rmw_mask);
+        *twi_masterBufferPtr = twi_reg;
+        twi_masterBufferIndex = 0;
+        twi_masterBufferLength = 2;
+        twi_state = TWI_MTX;
+        twi_slarw &= ~TW_WRITE;
+        TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
+        break;
+      }
     case TW_MR_SLA_NACK: // address sent, nack received
       twi_stop();
       break;

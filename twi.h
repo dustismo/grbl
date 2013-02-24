@@ -38,15 +38,35 @@
   #define TWI_SRX   3
   #define TWI_STX   4
   #define TWI_MTRX  5
+  #define TWI_M_RMW 6
   
   void twi_init(void);
   uint8_t twi_readFrom(uint8_t, uint8_t*, uint8_t);
   int8_t twi_nonBlockingReadFrom(uint8_t address, uint8_t* data, uint8_t length);
   int8_t twi_nonBlockingReadRegisterFrom(uint8_t address, uint8_t reg, uint8_t* data, uint8_t length);
   uint8_t twi_writeTo(uint8_t, uint8_t*, uint8_t, uint8_t);
+  int8_t twi_writeRegisterMaskedOneByte(uint8_t address, uint8_t reg, uint8_t data, uint8_t mask);
   void twi_reply(uint8_t);
   void twi_stop(void);
   void twi_releaseBus(void);
 
+// structures to support unitary transactions to MPC23017-like devices
+  typedef struct {
+    uint8_t address;
+    uint8_t reg;
+    uint8_t length;
+    uint8_t* data;
+  } twi_transaction_read;
+  typedef struct {
+    uint8_t address;
+    uint8_t reg;
+    uint8_t data;
+    uint8_t mask;
+  } twi_transaction_write_one_masked;
+  #define TWI_RD_TRANS_QUEUE_SIZE 1
+  #define TWI_WR1_TRANS_QUEUE_SIZE 1
+  int8_t twi_queue_read_transaction(twi_transaction_read* trans, uint8_t priority);
+  int8_t twi_queue_write_one_masked_transaction(twi_transaction_write_one_masked* trans, uint8_t priority);
+  void twi_queue_init();
 #endif
 
