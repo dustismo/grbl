@@ -80,15 +80,14 @@
 #ifdef USE_I2C_LIMITS
 #undef LIMIT_INT
 
-#define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
-#define X_LIMIT_BIT   7  // Uno Digital Pin 7
-#define Y_LIMIT_BIT   6  // Uno Digital Pin 6
-#define Z_LIMIT_BIT   5  // Uno Digital Pin 5
-#define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
-#define X_HOME_BIT   7  // Uno Digital Pin 7
-#define Y_HOME_BIT   6  // Uno Digital Pin 6
-#define Z_HOME_BIT   5  // Uno Digital Pin 5
-#define X2_HOME_BIT  2  // Uno Digital Pin 2 (INT0)
+#define X_LIMIT_BIT   1  // I2C expander GPB1 Pin 2
+#define Y_LIMIT_BIT   3  // I2C expander GPB3 Pin 4
+#define Z_LIMIT_BIT   5  // I2C expander GPB5 Pin 6
+#define X2_LIMIT_BIT  7  // I2C expander GPB7 Pin 8
+#define X_HOME_BIT   0  // I2C expander GPB0 Pin 1
+#define Y_HOME_BIT   2  // I2C expander GPB2 Pin 3
+#define Z_HOME_BIT   4  // I2C expander GPB4 Pin 5
+#define X2_HOME_BIT  6  // I2C expander GPB6 Pin 7
 
 #else
 #define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)
@@ -112,3 +111,5 @@
 
 #undef SPINDLE_PRESENT
 #undef COOLANT_PRESENT
+
+#define SPINDLE_ON_I2C

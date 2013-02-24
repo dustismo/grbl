@@ -231,6 +231,7 @@ void st_go_idle()
 
 // Hard limit test is called inside the stepper interrupt
 //  This version is for a configuration with mid-span home switch, end-of-travel limit switch
+// As coded here, no axis can move towards its limit until all axes are clear of their limits.
 static inline void test_hard_limits()
 {
   if ( settings.flags & (1<<BITFLAG_HARD_LIMIT_ENABLE) ) { 
@@ -263,6 +264,8 @@ inline static uint8_t iterate_trapezoid_cycle_counter()
 ISR(TIMER1_COMPA_vect)
 {        
   if (busy) { return; } // The busy-flag is used to avoid reentering this interrupt
+  
+  PORTC |= 0x08;  // diagnostic timing test
   
   // Set the direction pins a couple of nanoseconds before we step the steppers
   STEPPING_PORT = (STEPPING_PORT & ~DIRECTION_MASK) | (out_bits & DIRECTION_MASK);
@@ -441,6 +444,8 @@ ISR(TIMER1_COMPA_vect)
     }
   }
   busy = false;
+  PORTC &= ~(0x08); // diagnostic timing test
+  
 }
 
 // This interrupt is set up by ISR_TIMER1_COMPAREA when it sets the motor port bits. It resets
@@ -489,7 +494,10 @@ void st_init()
   // nothing ever changes X_STEP_BIT, Y_STEP_BIT, Z_STEP_BIT locations in out_bits0
   STEPPING_PORT = out_bits0;
   STEPPERS_DISABLE_DDR |= STEPPERS_DISABLE_MASK;
-
+  
+  // for diagnostic timing test
+  DDRC |= 0x08;
+  
   // waveform generation = 0100 = CTC
   TCCR1B &= ~(1<<WGM13);
   TCCR1B |=  (1<<WGM12);

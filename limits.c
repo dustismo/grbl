@@ -188,6 +188,8 @@ bool indep_increment(indep_t_ptr ht)
 static void run_independent_move(indep_t_ptr frame) { 
   #ifdef USE_I2C_LIMITS
   twi_readFrom(i2caddr, mcp23017_pins, 2);
+  // TODO: replace with unitary read (make it block with while(busy) {} wrapper)
+  //while(-1 == twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_GPIOA, mcp23017_pins, 2)) { }
   #endif
   for(;;) {
     if(!indep_mode) {
@@ -320,7 +322,6 @@ void limits_go_home()
 
 #if 0
   // sample code to test independent point-to-point positioning
-  //  bug warning: this isn't reliable when all 3 axes are commanded
   uint8_t x_axis=2, y_axis=2, z_axis=1;
   uint8_t n = (x_axis!=0) + (y_axis!=0) + (z_axis!=0);
   uint32_t dt = 1000000L/HOME_EVENTS_PER_SECOND; // usec/step

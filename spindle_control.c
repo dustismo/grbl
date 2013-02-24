@@ -29,16 +29,28 @@ void spindle_init()
 {
   current_direction = 0;
 #ifdef SPINDLE_PRESENT
+#ifdef SPINDLE_ON_I2C
+// no need to do anything?
+#else  
   SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT);
-  SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT);  
-  spindle_stop();
+  SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT); 
 #endif
+#endif
+  spindle_stop();
 }
 
 void spindle_stop()
 {
 #ifdef SPINDLE_PRESENT
+#ifdef SPINDLE_ON_I2C
+// uint8_t localbuf[2] = { MCP23017_OLATB, 0 };
+// while(-1 == twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_OLATB, localbuf+1, 1)) { }
+// note potential race condition if GPIOB is written by someone else in an interrupt routine
+// localbuf[1] &= ~(1<<SPINDLE_ENABLE_BIT);
+// twi_writeTo(i2caddr, localbuf, 2, DONT_WAIT);
+#else
   SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT);
+#endif
 #endif
 }
 
@@ -47,6 +59,20 @@ void spindle_run(int8_t direction) //, uint16_t rpm)
 #ifdef SPINDLE_PRESENT
   if (direction != current_direction) {
     plan_synchronize();
+#ifdef SPINDLE_ON_I2C
+//  uint8_t localbuf[2] = { MCP23017_OLATB, 0 };
+//  while(-1 == twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_OLATB, localbuf+1, 1)) { }
+//  note potential race condition if GPIOB is written by someone else in an interrupt routine
+    if (direction) {
+      if(direction > 0) {
+//      localbuf[1] &= ~(1<<SPINDLE_DIRECTION_BIT);
+      } else {
+//      localbuf[1] |= 1<<SPINDLE_DIRECTION_BIT;
+      }
+//    localbuf[1] |= 1<<SPINDLE_ENABLE_BIT;
+//    twi_writeTo(i2caddr, localbuf, 2, DONT_WAIT)
+
+#else
     if (direction) {
       if(direction > 0) {
         SPINDLE_DIRECTION_PORT &= ~(1<<SPINDLE_DIRECTION_BIT);
@@ -54,6 +80,7 @@ void spindle_run(int8_t direction) //, uint16_t rpm)
         SPINDLE_DIRECTION_PORT |= 1<<SPINDLE_DIRECTION_BIT;
       }
       SPINDLE_ENABLE_PORT |= 1<<SPINDLE_ENABLE_BIT;
+#endif
     } else {
       spindle_stop();     
     }
