@@ -82,6 +82,9 @@ void twi_init(void)
   note: TWBR should be 10 or higher for master mode
   It is 72 for a 16mhz Wiring board with 100kHz TWI */
 
+  // initialize transaction queue
+  twi_queue_init();
+  
   // enable twi module, acks, and twi interrupt
   TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
 }
