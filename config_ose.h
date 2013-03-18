@@ -84,10 +84,10 @@
 #define Y_LIMIT_BIT   3  // I2C expander GPB3 Pin 4
 #define Z_LIMIT_BIT   5  // I2C expander GPB5 Pin 6
 #define X2_LIMIT_BIT  7  // I2C expander GPB7 Pin 8
-#define X_HOME_BIT   0  // I2C expander GPB0 Pin 1
-#define Y_HOME_BIT   2  // I2C expander GPB2 Pin 3
-#define Z_HOME_BIT   4  // I2C expander GPB4 Pin 5
-#define X2_HOME_BIT  6  // I2C expander GPB6 Pin 7
+#define X_HOME_BIT   7  // I2C expander GPA7 Pin 28
+#define Y_HOME_BIT   6  // I2C expander GPA6 Pin 27
+#define Z_HOME_BIT   5  // I2C expander GPA5 Pin 26
+#define X2_HOME_BIT  2  // I2C expander GPA2 Pin 23
 
 #else
 #define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)

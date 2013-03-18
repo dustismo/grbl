@@ -436,7 +436,7 @@ void twi_stop(void)
 
   // update twi state
   twi_state = TWI_READY;
-  #if 1
+  #if 0
   twi_check_queues();
   #endif
 }
