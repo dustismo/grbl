@@ -132,14 +132,9 @@ home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.1; // mm/min^2; 0.
 }
 
 #ifdef USE_I2C_LIMITS
-uint8_t mcp23017_pins[2];
 twi_transaction_read trans;
-// TBD: eventually have home_limit_state updating triggered by MCP23017_INT, not polled
 inline uint8_t home_limit_state() {
-  //twi_queue_read_transaction(&trans, 1);
-  //return (volatile uint8_t)mcp23017_pins[0];
-  return (volatile uint8_t)GPIO_read_buf[0];
-  
+  return (volatile uint8_t)GPIO_read_buf[0]; // updated in background by MCP23017_interrupt
 }
 #else
 inline uint8_t home_limit_state() {
@@ -194,12 +189,13 @@ bool indep_increment(indep_t_ptr ht)
 // Start the stepper driver in independent mode, and wait for it to complete
 static void run_independent_move(indep_t_ptr frame) { 
   #ifdef USE_I2C_LIMITS
+  // capture current home/limit state (needed at cold start)
   trans.address = i2caddr;
   trans.reg = MCP23017_GPIOA;
-  trans.length = 2;
-  trans.data = GPIO_read_buf; //mcp23017_pins;
+  trans.length = 1;
+  trans.data = GPIO_read_buf;
   twi_queue_read_transaction(&trans, 1);
-  delay_ms(2);
+  delay_ms(2); // a generous wait for I2C operation to complete
   #endif
   for(;;) {
     if(!indep_mode) {

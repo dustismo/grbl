@@ -1,14 +1,16 @@
 /*************************************************** 
-  This is a library for the MCP23017 i2c port expander
+  This is a limited-function library for the MCP23017 i2c port expander
 
-  These displays use I2C to communicate, 2 pins are required to  
-  interface
-  Adafruit invests time and resources providing this open source code, 
-  please support Adafruit and open-source hardware by purchasing 
-  products from Adafruit!
-
-  Written by Limor Fried/Ladyada for Adafruit Industries.  
-  BSD license, all text above must be included in any redistribution
+  (c) 2012-13 Chuck Harrison for http:/opensourceecology.org
+  BSD license
+  
+  Inspired by Adafruit_MCP23017.c whose copyright notice appears below
+  > Adafruit invests time and resources providing this open source code, 
+  > please support Adafruit and open-source hardware by purchasing 
+  > products from Adafruit!
+  > 
+  > Written by Limor Fried/Ladyada for Adafruit Industries.  
+  > BSD license, all text above must be included in any redistribution
  ****************************************************/
 
 #include "twi.h"
@@ -92,16 +94,6 @@ uint16_t MCP23017_readGPIOAB() {
   return ba;
 }
 
-void MCP23017_writeGPIOAB(uint16_t ba) {
-/*
-  Wire.beginTransmission(MCP23017_ADDRESS | i2caddr);
-  wiresend(MCP23017_GPIOA);	
-  wiresend(ba & 0xFF);
-  wiresend(ba >> 8);
-  Wire.endTransmission();
-*/
-}
-
 void MCP23017_digitalWrite(uint8_t p, uint8_t d) {
   uint8_t localbuf[2];
   uint8_t olataddr;
@@ -134,17 +126,16 @@ void MCP23017_digitalWrite(uint8_t p, uint8_t d) {
 
 #ifdef MCP23017_INT_PIN // if defined, it is 0 or 1
 // Use MCP23017's interrupt output to trigger a GPIO read operation
-// Using dedicated interrupts INT0/INT1 (not pin-change interrupt)
-// ...
+// Using AVR's dedicated interrupts INT0/INT1 (not pin-change interrupt)
 uint8_t GPIO_read_buf[2];
 twi_transaction_read GPIOread_trans;
 void init_MCP23017_interrupt() {
   GPIOread_trans.address = i2caddr;
   GPIOread_trans.reg = MCP23017_GPIOA;
-  GPIOread_trans.length = 2;
+  GPIOread_trans.length = 1;
   GPIOread_trans.data = GPIO_read_buf;
   // set INTx falling edge sensitive
-  EICRA = EICRA & ~( 3 << (2*MCP23017_INT_PIN) ) | ( 2 << (2*MCP23017_INT_PIN) );
+  EICRA = (EICRA & ~( 3 << (2*MCP23017_INT_PIN) )) | ( 2 << (2*MCP23017_INT_PIN) );
   EIMSK |= 1 << (MCP23017_INT_PIN);
 }  
 ISR(MCP23017_INT_vect) 
@@ -156,65 +147,3 @@ ISR(MCP23017_INT_vect)
 void init_MCP23017_interrupt() { }
 #endif
 
-#if 0
-void Adafruit_MCP23017::pullUp(uint8_t p, uint8_t d) {
-  uint8_t gppu;
-  uint8_t gppuaddr;
-
-  // only 16 bits!
-  if (p > 15)
-    return;
-
-  if (p < 8)
-    gppuaddr = MCP23017_GPPUA;
-  else {
-    gppuaddr = MCP23017_GPPUB;
-    p -= 8;
-  }
-
-
-  // read the current pullup resistor set
-  Wire.beginTransmission(MCP23017_ADDRESS | i2caddr);
-  wiresend(gppuaddr);	
-  Wire.endTransmission();
-  
-  Wire.requestFrom(MCP23017_ADDRESS | i2caddr, 1);
-  gppu = wirerecv();
-
-  // set the pin and direction
-  if (d == HIGH) {
-    gppu |= 1 << p; 
-  } else {
-    gppu &= ~(1 << p);
-  }
-
-  // write the new GPIO
-  Wire.beginTransmission(MCP23017_ADDRESS | i2caddr);
-  wiresend(gppuaddr);
-  wiresend(gppu);	
-  Wire.endTransmission();
-}
-
-uint8_t Adafruit_MCP23017::digitalRead(uint8_t p) {
-  uint8_t gpioaddr;
-
-  // only 16 bits!
-  if (p > 15)
-    return 0;
-
-  if (p < 8)
-    gpioaddr = MCP23017_GPIOA;
-  else {
-    gpioaddr = MCP23017_GPIOB;
-    p -= 8;
-  }
-
-  // read the current GPIO
-  Wire.beginTransmission(MCP23017_ADDRESS | i2caddr);
-  wiresend(gpioaddr);	
-  Wire.endTransmission();
-  
-  Wire.requestFrom(MCP23017_ADDRESS | i2caddr, 1);
-  return (wirerecv() >> p) & 0x1;
-}
-#endif

@@ -1,7 +1,11 @@
 /*
-  twi.c - TWI/I2C library for Wiring & Arduino
+  twi.h - TWI/I2C library for Wiring & Arduino
   Copyright (c) 2006 Nicholas Zambetti.  All right reserved.
 
+  transaction based extensions
+  (c) 2013 Chuck Harrison for http://opensourceecology.org, same license
+  (also stripped out slave code to save space in this application)
+  
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
   License as published by the Free Software Foundation; either
@@ -16,6 +20,7 @@
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
+
 
 #include <math.h>
 #include <stdlib.h>
@@ -449,9 +454,8 @@ void twi_stop(void)
 
   // update twi state
   twi_state = TWI_READY;
-  #if 1
+  // proceed with any queued transactions
   twi_check_queues();
-  #endif
 }
 
 /* 

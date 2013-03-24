@@ -89,11 +89,9 @@
 #define Z_HOME_BIT   5  // I2C expander GPA5 Pin 26
 #define X2_HOME_BIT  2  // I2C expander GPA2 Pin 23
 
-// interrupt-driven read of MCP23017 I2C io extender input from change of state output
+// interrupt-driven read of MCP23017 I2C io extender input from its change of state output
 #define MCP23017_INT_PIN 0 // INT0
-#ifdef MCP23017_INT_PIN
 #define MCP23017_INT_vect INT0_vect
-#endif
 
 #else
 #define X2_LIMIT_BIT  2  // Uno Digital Pin 2 (INT0)

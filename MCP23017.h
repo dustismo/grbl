@@ -1,28 +1,25 @@
 /*************************************************** 
-  This is a library for the MCP23017 i2c port expander
+  This is a limited-function library for the MCP23017 i2c port expander
 
-  These displays use I2C to communicate, 2 pins are required to  
-  interface
-  Adafruit invests time and resources providing this open source code, 
-  please support Adafruit and open-source hardware by purchasing 
-  products from Adafruit!
-
-  Written by Limor Fried/Ladyada for Adafruit Industries.  
-  BSD license, all text above must be included in any redistribution
+  (c) 2012-13 Chuck Harrison for http:/opensourceecology.org
+  BSD license
+  
+  Inspired by Adafruit_MCP23017.h whose copyright notice appears below
+  > Adafruit invests time and resources providing this open source code, 
+  > please support Adafruit and open-source hardware by purchasing 
+  > products from Adafruit!
+  > 
+  > Written by Limor Fried/Ladyada for Adafruit Industries.  
+  > BSD license, all text above must be included in any redistribution
  ****************************************************/
 
-#ifndef _Adafruit_MCP23017_H_
-#define _Adafruit_MCP23017_H_
-
+#ifndef _MCP23017_H_
+#define _MCP23017_H_
 
   void MCP23017_begin(uint8_t addr);
   void MCP23017_pinMode(uint8_t p, uint8_t d);
   void MCP23017_digitalWrite(uint8_t p, uint8_t d);
-  
-  //void pullUp(uint8_t p, uint8_t d);
-  //uint8_t digitalRead(uint8_t p);
 
-  void writeGPIOAB(uint16_t);
   uint16_t MCP23017_readGPIOAB();
 
   uint8_t i2caddr;
