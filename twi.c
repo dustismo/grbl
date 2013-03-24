@@ -1,10 +1,13 @@
 /*
-  twi.h - TWI/I2C library for Wiring & Arduino
+  twi.c - TWI/I2C library for Wiring & Arduino
   Copyright (c) 2006 Nicholas Zambetti.  All right reserved.
 
   transaction based extensions
   (c) 2013 Chuck Harrison for http://opensourceecology.org, same license
   (also stripped out slave code to save space in this application)
+  ****WARNING****  work in progress  ****WARNING****
+  The transaction-based read operations have had very limited testing 
+  and the transaction-based write operations have had none.
   
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -28,7 +31,6 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <compat/twi.h>
-//#include "Arduino.h" // for digitalWrite
 
 #ifndef cbi
 #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
