@@ -16,10 +16,9 @@
 
 
   void MCP23017_begin(uint8_t addr);
-  //void begin(void);
-
   void MCP23017_pinMode(uint8_t p, uint8_t d);
   void MCP23017_digitalWrite(uint8_t p, uint8_t d);
+  
   //void pullUp(uint8_t p, uint8_t d);
   //uint8_t digitalRead(uint8_t p);
 

@@ -15,9 +15,11 @@
 #include <avr/pgmspace.h>
 #include "MCP23017.h"
 #include "config.h"
+#include <avr/interrupt.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////
+void init_MCP23017_interrupt(); // forward declaration
 
 void MCP23017_begin(uint8_t addr) {
   i2caddr = MCP23017_ADDRESS | (addr&7);
@@ -31,11 +33,16 @@ void MCP23017_begin(uint8_t addr) {
   twi_writeTo(i2caddr, localbuf, 3, DO_WAIT);
   #ifdef USE_I2C_LIMITS
   // set up IOCON.SEQOP=1, BANK=0 to read repeatedly from both input latches
+  //  also INT output is active low, active driver.
   localbuf[0]=MCP23017_IOCONA; localbuf[1]=0x20; 
   twi_writeTo(i2caddr, localbuf, 2, DO_WAIT);
-  // try out new read function  
-  //while(-1 == twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_GPIOA, localbuf, 2)) { }
-  
+  // set up INTCONA for interrupt on change (same as power-on default)
+  localbuf[0]=MCP23017_INTCONA; localbuf[1]=0x00; 
+  twi_writeTo(i2caddr, localbuf, 2, DO_WAIT);
+  // set up GPINTENA to enable interrupt on all pins
+  localbuf[0]=MCP23017_GPINTENA; localbuf[1]=0xFF; 
+  twi_writeTo(i2caddr, localbuf, 2, DO_WAIT);
+  init_MCP23017_interrupt();
   #endif
 }
 
@@ -125,27 +132,28 @@ void MCP23017_digitalWrite(uint8_t p, uint8_t d) {
   status = twi_writeTo(i2caddr, localbuf, 2, DO_WAIT);
 }
 
-#ifdef MCP23017_INT_PIN
+#ifdef MCP23017_INT_PIN // if defined, it is 0 or 1
 // Use MCP23017's interrupt output to trigger a GPIO read operation
-// TBD: are we using dedicated interrupts INT0/INT1 or pinchange interrupts PCINT?
-//      PCINT requires sharing interrupt vector with other pin change sources.
-// e.g. pinchange:
-//    LIMIT_PCMSK |= LIMIT_MASK; // Enable specific pins of the Pin Change Interrupt
-//    PCICR |= (1 << LIMIT_INT); // Enable Pin Change Interrupt
-// or dedicated
+// Using dedicated interrupts INT0/INT1 (not pin-change interrupt)
 // ...
 uint8_t GPIO_read_buf[2];
 twi_transaction_read GPIOread_trans;
-trans.address = i2caddr;
-trans.reg = MCP23017_GPIOA;
-trans.length = 2;
-trans.data = GPIO_read_buf;
+void init_MCP23017_interrupt() {
+  GPIOread_trans.address = i2caddr;
+  GPIOread_trans.reg = MCP23017_GPIOA;
+  GPIOread_trans.length = 2;
+  GPIOread_trans.data = GPIO_read_buf;
+  // set INTx falling edge sensitive
+  EICRA = EICRA & ~( 3 << (2*MCP23017_INT_PIN) ) | ( 2 << (2*MCP23017_INT_PIN) );
+  EIMSK |= 1 << (MCP23017_INT_PIN);
+}  
 ISR(MCP23017_INT_vect) 
 {
   // schedule a read operation at priority 0
-  twi_queue_read_transaction(GPIOread_trans, 0);
+  twi_queue_read_transaction(&GPIOread_trans, 0);
 }
-
+#else
+void init_MCP23017_interrupt() { }
 #endif
 
 #if 0
