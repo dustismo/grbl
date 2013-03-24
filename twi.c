@@ -357,7 +357,7 @@ void twi_check_queues () {
       return;
     }
     twi_transaction_write_one_masked** tw1 = twi_wr1_queue+p;
-    if (p<TWI_WR1_TRANS_QUEUE_SIZE && tw1!=NULL) {
+    if (p<TWI_WR1_TRANS_QUEUE_SIZE && *tw1!=NULL) {
       twi_writeRegisterMaskedOneByte((*tw1)->address, (*tw1)->reg, (*tw1)->data, (*tw1)->mask);
       *tw1 = NULL;
       return;
@@ -521,7 +521,7 @@ SIGNAL(TWI_vect)
       if(twi_state==TWI_M_RMW) {
         // finished read phase of read-modify-write operation;
         // move modified data into 2nd buffer byte & put register value in 1st
-        *(twi_masterBufferPtr+1) = *twi_masterBufferPtr & ~twi_rmw_mask
+        *(twi_masterBufferPtr+1) = (*twi_masterBufferPtr & ~twi_rmw_mask)
                                    | (twi_rmw_data & twi_rmw_mask);
         *twi_masterBufferPtr = twi_reg;
         twi_masterBufferIndex = 0;
