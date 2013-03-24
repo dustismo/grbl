@@ -329,6 +329,9 @@ int8_t twi_writeRegisterMaskedOneByte(uint8_t address, uint8_t reg, uint8_t data
 
 
 /************** transaction queue management ***************/
+/*
+*  max is just one read & one write transaction queued at each priority level
+*/
 
 twi_transaction_read* twi_read_queue[TWI_RD_TRANS_QUEUE_SIZE];
 twi_transaction_write_one_masked* twi_wr1_queue[TWI_WR1_TRANS_QUEUE_SIZE];
@@ -345,40 +348,50 @@ void twi_queue_init() {
 
 // check for pending transactions and initiate highest priority one
 //
-#define MAX_Q (TWI_RD_TRANS_QUEUE_SIZE < TWI_WR1_TRANS_QUEUE_SIZE) ? \
-                TWI_RD_TRANS_QUEUE_SIZE : TWI_WR1_TRANS_QUEUE_SIZE 
 void twi_check_queues () {
   uint8_t p;
-  for(p=0; p<MAX_Q; p++) {
+  for(p=0; p<TWI_RD_TRANS_QUEUE_SIZE || p<TWI_WR1_TRANS_QUEUE_SIZE; p++) {
     twi_transaction_read** tr = twi_read_queue+p;
     if (p<TWI_RD_TRANS_QUEUE_SIZE && *tr!= NULL) {
-      twi_nonBlockingReadRegisterFrom((*tr)->address, (*tr)->reg, (*tr)->data, (*tr)->length);
-      *tr = NULL;
-      return;
+      if(twi_nonBlockingReadRegisterFrom((*tr)->address, (*tr)->reg, (*tr)->data, (*tr)->length) == -1) {
+        return; // TWI is busy
+      } else {
+        *tr = NULL;
+        return;
+      }
     }
     twi_transaction_write_one_masked** tw1 = twi_wr1_queue+p;
     if (p<TWI_WR1_TRANS_QUEUE_SIZE && *tw1!=NULL) {
-      twi_writeRegisterMaskedOneByte((*tw1)->address, (*tw1)->reg, (*tw1)->data, (*tw1)->mask);
+      if(twi_writeRegisterMaskedOneByte((*tw1)->address, (*tw1)->reg, (*tw1)->data, (*tw1)->mask) == -1) {
+        return; // TWI is busy
+      } else {
       *tw1 = NULL;
       return;
+      }
     }
   }
+  return; // nothing in queue
 }
+// put a read transaction in the queue (priority=0 is highest)
 int8_t twi_queue_read_transaction(twi_transaction_read* trans, uint8_t priority) {
   if (priority>=TWI_RD_TRANS_QUEUE_SIZE) {
     return -2; // invalid priority level
   }
+  uint8_t rv = 0;
   uint8_t sreg_save = SREG; 
   cli(); 
   if(twi_read_queue[priority] != NULL) {
-    SREG = sreg_save; 
-    return -1; // busy
+    rv = -1; // busy
+  } else {
+    twi_read_queue[priority] = trans;
+    if(twi_state==TWI_READY) {
+      twi_check_queues();
+    }
   }
-  twi_read_queue[priority] = trans;
   SREG = sreg_save;
-  return 0; // success
+  return rv;
 }
-
+// put a write transaction in the queue (priority=0 is highest)
 int8_t twi_queue_write_one_masked_transaction(twi_transaction_write_one_masked* trans, uint8_t priority) {
   if (priority>=TWI_WR1_TRANS_QUEUE_SIZE) {
     return -2; // invalid priority level
@@ -436,7 +449,7 @@ void twi_stop(void)
 
   // update twi state
   twi_state = TWI_READY;
-  #if 0
+  #if 1
   twi_check_queues();
   #endif
 }

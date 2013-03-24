@@ -124,6 +124,30 @@ void MCP23017_digitalWrite(uint8_t p, uint8_t d) {
   // write the new GPIO
   status = twi_writeTo(i2caddr, localbuf, 2, DO_WAIT);
 }
+
+#ifdef MCP23017_INT_PIN
+// Use MCP23017's interrupt output to trigger a GPIO read operation
+// TBD: are we using dedicated interrupts INT0/INT1 or pinchange interrupts PCINT?
+//      PCINT requires sharing interrupt vector with other pin change sources.
+// e.g. pinchange:
+//    LIMIT_PCMSK |= LIMIT_MASK; // Enable specific pins of the Pin Change Interrupt
+//    PCICR |= (1 << LIMIT_INT); // Enable Pin Change Interrupt
+// or dedicated
+// ...
+uint8_t GPIO_read_buf[2];
+twi_transaction_read GPIOread_trans;
+trans.address = i2caddr;
+trans.reg = MCP23017_GPIOA;
+trans.length = 2;
+trans.data = GPIO_read_buf;
+ISR(MCP23017_INT_vect) 
+{
+  // schedule a read operation at priority 0
+  twi_queue_read_transaction(GPIOread_trans, 0);
+}
+
+#endif
+
 #if 0
 void Adafruit_MCP23017::pullUp(uint8_t p, uint8_t d) {
   uint8_t gppu;

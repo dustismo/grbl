@@ -63,8 +63,8 @@
     uint8_t data;
     uint8_t mask;
   } twi_transaction_write_one_masked;
-  #define TWI_RD_TRANS_QUEUE_SIZE 1
-  #define TWI_WR1_TRANS_QUEUE_SIZE 1
+  #define TWI_RD_TRANS_QUEUE_SIZE 2
+  #define TWI_WR1_TRANS_QUEUE_SIZE 2
   int8_t twi_queue_read_transaction(twi_transaction_read* trans, uint8_t priority);
   int8_t twi_queue_write_one_masked_transaction(twi_transaction_write_one_masked* trans, uint8_t priority);
   void twi_queue_init();

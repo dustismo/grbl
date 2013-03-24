@@ -88,7 +88,10 @@ ISR(LIMIT_INT_vect)
   }
 }
 #else
-void limits_init() { } // not necessary with ose I2C limits
+
+void limits_init() { 
+
+} // not necessary with ose I2C limits
 #endif
 
 // Moves each axis in a trapezoidal move with axis-specific accel, decel, and slew speed
@@ -129,9 +132,13 @@ home_params[Z_AXIS].decel = home_params[Z_AXIS].rate[0]*60./0.1; // mm/min^2; 0.
 }
 
 #ifdef USE_I2C_LIMITS
-static uint8_t mcp23017_pins[2];
+uint8_t mcp23017_pins[2];
+twi_transaction_read trans;
+
+// TBD: eventually have home_limit_state updating triggered by MCP23017_INT, not polled
 inline uint8_t home_limit_state() {
-  twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_GPIOA, mcp23017_pins, 2);
+  //twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_GPIOA, mcp23017_pins, 2);
+  twi_queue_read_transaction(&trans, 0);
   return (volatile uint8_t)mcp23017_pins[0];
 }
 #else
@@ -187,9 +194,14 @@ bool indep_increment(indep_t_ptr ht)
 // Start the stepper driver in independent mode, and wait for it to complete
 static void run_independent_move(indep_t_ptr frame) { 
   #ifdef USE_I2C_LIMITS
-  twi_readFrom(i2caddr, mcp23017_pins, 2);
+  //twi_readFrom(i2caddr, mcp23017_pins, 2);
   // TODO: replace with unitary read (make it block with while(busy) {} wrapper)
   //while(-1 == twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_GPIOA, mcp23017_pins, 2)) { }
+  trans.address = i2caddr;
+  trans.reg = MCP23017_GPIOA;
+  trans.length = 2;
+  trans.data = mcp23017_pins;
+  while(twi_queue_read_transaction(&trans, 0) == 0) { }
   #endif
   for(;;) {
     if(!indep_mode) {

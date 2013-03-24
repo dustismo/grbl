@@ -27,7 +27,7 @@
   uint16_t MCP23017_readGPIOAB();
 
   uint8_t i2caddr;
-
+  extern uint8_t GPIO_read_buf[2];
 
 #define MCP23017_ADDRESS 0x20
 
