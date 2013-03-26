@@ -113,7 +113,7 @@
 #define HOME_MASK ((1<<X_HOME_BIT)|(1<<X2_HOME_BIT)|(1<<Y_HOME_BIT)|(1<<Z_HOME_BIT)) // All limit bits
 #define LIMITS_INVERT_MASK 0
 
-#undef SPINDLE_PRESENT
+#define SPINDLE_PRESENT
 #undef COOLANT_PRESENT
 
 #define SPINDLE_ON_I2C

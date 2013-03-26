@@ -23,6 +23,14 @@
 #include "spindle_control.h"
 #include "planner.h"
 
+#ifdef SPINDLE_ON_I2C
+#include "twi.h"
+#include "MCP23017.h"
+
+twi_transaction_write_one_masked trans;
+
+#endif
+
 static uint8_t current_direction;
 
 void spindle_init()
@@ -30,7 +38,15 @@ void spindle_init()
   current_direction = 0;
 #ifdef SPINDLE_PRESENT
 #ifdef SPINDLE_ON_I2C
-// no need to do anything?
+  trans.address = i2caddr;
+  // TBD: uncommenting the write transaction seems to disable MCP23017 INT generation
+  //set output direction
+  trans.reg = MCP23017_IODIRB;
+  trans.data = 0 ;
+  trans.mask = (1 << SPINDLE_ENABLE_BIT) | (1 << SPINDLE_DIRECTION_BIT) ;
+  //twi_queue_write_one_masked_transaction(&trans, 1);
+  // prepare for data
+  trans.reg = MCP23017_OLATB;
 #else  
   SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT);
   SPINDLE_DIRECTION_DDR |= (1<<SPINDLE_DIRECTION_BIT); 
@@ -43,37 +59,36 @@ void spindle_stop()
 {
 #ifdef SPINDLE_PRESENT
 #ifdef SPINDLE_ON_I2C
-// uint8_t localbuf[2] = { MCP23017_OLATB, 0 };
-// while(-1 == twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_OLATB, localbuf+1, 1)) { }
-// note potential race condition if GPIOB is written by someone else in an interrupt routine
-// localbuf[1] &= ~(1<<SPINDLE_ENABLE_BIT);
-// twi_writeTo(i2caddr, localbuf, 2, DONT_WAIT);
+  trans.data = 0;
+  trans.mask = 1 << SPINDLE_ENABLE_BIT;
+  trans.reg = MCP23017_OLATB;
+  twi_queue_write_one_masked_transaction(&trans, 1);
 #else
   SPINDLE_ENABLE_PORT &= ~(1<<SPINDLE_ENABLE_BIT);
 #endif
 #endif
 }
 
+// direction is 1, -1, 0 for M3, M4, M5
 void spindle_run(int8_t direction) //, uint16_t rpm) 
 {
 #ifdef SPINDLE_PRESENT
   if (direction != current_direction) {
     plan_synchronize();
+    
 #ifdef SPINDLE_ON_I2C
-//  uint8_t localbuf[2] = { MCP23017_OLATB, 0 };
-//  while(-1 == twi_nonBlockingReadRegisterFrom(i2caddr, MCP23017_OLATB, localbuf+1, 1)) { }
-//  note potential race condition if GPIOB is written by someone else in an interrupt routine
-    if (direction) {
-      if(direction > 0) {
-//      localbuf[1] &= ~(1<<SPINDLE_DIRECTION_BIT);
+    if(direction) {
+      if (direction < 0) {
+        trans.data = (1 << SPINDLE_ENABLE_BIT) | (1 << SPINDLE_DIRECTION_BIT) ;
       } else {
-//      localbuf[1] |= 1<<SPINDLE_DIRECTION_BIT;
+        trans.data = (1 << SPINDLE_ENABLE_BIT);
       }
-//    localbuf[1] |= 1<<SPINDLE_ENABLE_BIT;
-//    twi_writeTo(i2caddr, localbuf, 2, DONT_WAIT)
-
+      trans.mask = (1 << SPINDLE_ENABLE_BIT) | (1 << SPINDLE_DIRECTION_BIT) ;
+      trans.reg = MCP23017_OLATB;
+      twi_queue_write_one_masked_transaction(&trans, 1);
+      
 #else
-    if (direction) {
+    if(direction) {
       if(direction > 0) {
         SPINDLE_DIRECTION_PORT &= ~(1<<SPINDLE_DIRECTION_BIT);
       } else {
@@ -81,10 +96,11 @@ void spindle_run(int8_t direction) //, uint16_t rpm)
       }
       SPINDLE_ENABLE_PORT |= 1<<SPINDLE_ENABLE_BIT;
 #endif
+
     } else {
-      spindle_stop();     
+      spindle_stop();
     }
-    current_direction = direction;
+  current_direction = direction;
   }
 #endif
 }

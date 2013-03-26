@@ -364,6 +364,7 @@ void twi_check_queues () {
         return; // TWI is busy
       } else {
         *tr = NULL;
+        // TBD: can we alert originator that his transaction block has been unlinked? Set length <0?
         return;
       }
     }
@@ -372,7 +373,8 @@ void twi_check_queues () {
       if(twi_writeRegisterMaskedOneByte((*tw1)->address, (*tw1)->reg, (*tw1)->data, (*tw1)->mask) == -1) {
         return; // TWI is busy
       } else {
-      *tw1 = NULL;
+        *tw1 = NULL;
+        // TBD: can we alert originator that his transaction block has been unlinked?
       return;
       }
     }
@@ -493,6 +495,7 @@ SIGNAL(TWI_vect)
         twi_reply(1); // ack
         break;
       }
+      // else fall thru...
     case TW_MT_DATA_ACK: // slave receiver acked data
       if(twi_state==TWI_MTRX || twi_state==TWI_M_RMW) {
         // sent register adder; switch to RX mode and issue repeated start
@@ -546,7 +549,7 @@ SIGNAL(TWI_vect)
         twi_masterBufferIndex = 0;
         twi_masterBufferLength = 2;
         twi_state = TWI_MTX;
-        twi_slarw &= ~TW_WRITE;
+        twi_slarw &= ~TW_READ; // reset to WRITE mode
         TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
         break;
       }

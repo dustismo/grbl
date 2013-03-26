@@ -3,6 +3,7 @@
 
   (c) 2012-13 Chuck Harrison for http:/opensourceecology.org
   BSD license
+  (however check license of twi.c against which it links)
   
   Inspired by Adafruit_MCP23017.c whose copyright notice appears below
   > Adafruit invests time and resources providing this open source code, 
@@ -27,9 +28,13 @@ void MCP23017_begin(uint8_t addr) {
   i2caddr = MCP23017_ADDRESS | (addr&7);
   twi_init();
   // set defaults
-  // all pins input direction
+  // A pins input direction, 2 B pins output (for spindle control)
   static uint8_t localbuf[3];
-  localbuf[0]=MCP23017_IODIRA; localbuf[1]=0xFF; localbuf[2]=0xFF;
+  localbuf[0]=MCP23017_IODIRA; localbuf[1]=0xFF; localbuf[2]=0xCF;
+  twi_writeTo(i2caddr, localbuf, 3, DO_WAIT);
+  // TBD: for some reason first transaction is corrupted; repeat
+  
+  localbuf[0]=MCP23017_IODIRA; localbuf[1]=0xFF; localbuf[2]=0xCF;
   // out direction
   //uint8_t localbuf[] = {MCP23017_IODIRA, 0x00, 0x00};
   twi_writeTo(i2caddr, localbuf, 3, DO_WAIT);
@@ -135,6 +140,7 @@ void init_MCP23017_interrupt() {
   GPIOread_trans.length = 1;
   GPIOread_trans.data = GPIO_read_buf;
   // set INTx falling edge sensitive
+  // TBD: may need to be level sensitive in case we get out of sync with MCP23017
   EICRA = (EICRA & ~( 3 << (2*MCP23017_INT_PIN) )) | ( 2 << (2*MCP23017_INT_PIN) );
   EIMSK |= 1 << (MCP23017_INT_PIN);
 }  

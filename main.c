@@ -63,6 +63,9 @@ int main(void)
     // reset to finish the initialization process.
     if (sys.abort) {
       // Reset system.
+      #ifdef MCP23017_PRESENT
+      MCP23017_begin(0);
+      #endif
       serial_reset_read_buffer(); // Clear serial read buffer
       plan_init(); // Clear block buffer and planner variables
       gc_init(); // Set g-code parser to default state
@@ -70,9 +73,6 @@ int main(void)
       spindle_init();
       #ifdef COOLANT_PRESENT
       coolant_init();
-      #endif
-      #ifdef MCP23017_PRESENT
-      MCP23017_begin(0);
       #endif
       limits_init();
       home_init();
