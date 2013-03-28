@@ -39,13 +39,13 @@ void spindle_init()
 #ifdef SPINDLE_PRESENT
 #ifdef SPINDLE_ON_I2C
   trans.address = i2caddr;
-  // TBD: uncommenting the write transaction seems to disable MCP23017 INT generation
-  //set output direction
+  //set output direction in MCP23017
   trans.reg = MCP23017_IODIRB;
   trans.data = 0 ;
   trans.mask = (1 << SPINDLE_ENABLE_BIT) | (1 << SPINDLE_DIRECTION_BIT) ;
-  //twi_queue_write_one_masked_transaction(&trans, 1);
+  twi_queue_write_one_masked_transaction(&trans, 1);
   // prepare for data
+  delay_ms(2); // TBD: wait for transaction completion status
   trans.reg = MCP23017_OLATB;
 #else  
   SPINDLE_ENABLE_DDR |= (1<<SPINDLE_ENABLE_BIT);

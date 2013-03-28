@@ -59,12 +59,14 @@
     uint8_t reg;
     uint8_t length;
     uint8_t* data;
+    uint8_t completion;
   } twi_transaction_read;
   typedef struct {
     uint8_t address;
     uint8_t reg;
     uint8_t data;
     uint8_t mask;
+    uint8_t completion;
   } twi_transaction_write_one_masked;
   #define TWI_RD_TRANS_QUEUE_SIZE 2
   #define TWI_WR1_TRANS_QUEUE_SIZE 2

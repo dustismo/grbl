@@ -56,6 +56,7 @@ static uint8_t* twi_masterBufferPtr;
 
 static volatile uint8_t twi_error;
 
+
 /* 
  * Function twi_init
  * Desc     readys twi pins and sets twi bitrate
@@ -354,7 +355,7 @@ void twi_queue_init() {
 }
 
 // check for pending transactions and initiate highest priority one
-//
+//  TBD: remember last transaction executed in order to support completion status
 void twi_check_queues () {
   uint8_t p;
   for(p=0; p<TWI_RD_TRANS_QUEUE_SIZE || p<TWI_WR1_TRANS_QUEUE_SIZE; p++) {
@@ -364,7 +365,7 @@ void twi_check_queues () {
         return; // TWI is busy
       } else {
         *tr = NULL;
-        // TBD: can we alert originator that his transaction block has been unlinked? Set length <0?
+        // TBD: use completion field to alert originator that his transaction block has been unlinked 
         return;
       }
     }
@@ -374,7 +375,7 @@ void twi_check_queues () {
         return; // TWI is busy
       } else {
         *tw1 = NULL;
-        // TBD: can we alert originator that his transaction block has been unlinked?
+        // TBD: use completion field to alert originator that his transaction block has been unlinked
       return;
       }
     }
@@ -498,8 +499,15 @@ SIGNAL(TWI_vect)
       // else fall thru...
     case TW_MT_DATA_ACK: // slave receiver acked data
       if(twi_state==TWI_MTRX || twi_state==TWI_M_RMW) {
-        // sent register adder; switch to RX mode and issue repeated start
+        // sent register addr; switch to RX mode and issue repeated start
+        // timing problem with repeated start? send stop/start
+        // send stop condition
+        TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTO);
+        while(TWCR & _BV(TWSTO)){
+          continue;
+        }
         twi_slarw |= TW_READ;
+        // now start
         TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
         break;
       }
@@ -550,6 +558,7 @@ SIGNAL(TWI_vect)
         twi_masterBufferLength = 2;
         twi_state = TWI_MTX;
         twi_slarw &= ~TW_READ; // reset to WRITE mode
+        // repeated start should work properly here because NAK left SDA high ?
         TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
         break;
       }

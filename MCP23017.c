@@ -27,21 +27,16 @@ void init_MCP23017_interrupt(); // forward declaration
 void MCP23017_begin(uint8_t addr) {
   i2caddr = MCP23017_ADDRESS | (addr&7);
   twi_init();
+  twi_releaseBus();
   // set defaults
-  // A pins input direction, 2 B pins output (for spindle control)
+  // All  pins input at startup (some B pins will become outputs later, e.g for spindle control)
   static uint8_t localbuf[3];
-  localbuf[0]=MCP23017_IODIRA; localbuf[1]=0xFF; localbuf[2]=0xCF;
-  twi_writeTo(i2caddr, localbuf, 3, DO_WAIT);
-  // TBD: for some reason first transaction is corrupted; repeat
-  
-  localbuf[0]=MCP23017_IODIRA; localbuf[1]=0xFF; localbuf[2]=0xCF;
-  // out direction
-  //uint8_t localbuf[] = {MCP23017_IODIRA, 0x00, 0x00};
+  localbuf[0]=MCP23017_IODIRA; localbuf[1]=0xFF; localbuf[2]=0xFF;
   twi_writeTo(i2caddr, localbuf, 3, DO_WAIT);
   #ifdef USE_I2C_LIMITS
-  // set up IOCON.SEQOP=1, BANK=0 to read repeatedly from both input latches
+  // set up IOCON.SEQOP=0, BANK=0 
   //  also INT output is active low, active driver.
-  localbuf[0]=MCP23017_IOCONA; localbuf[1]=0x20; 
+  localbuf[0]=MCP23017_IOCONA; localbuf[1]=0x00; // IOCON.SEQOP=1: 0x20; 
   twi_writeTo(i2caddr, localbuf, 2, DO_WAIT);
   // set up INTCONA for interrupt on change (same as power-on default)
   localbuf[0]=MCP23017_INTCONA; localbuf[1]=0x00; 
